@@ -7,6 +7,7 @@ namespace fft {
 
 using cmplx = std::complex<double>;
 
+// Predeclaring kernel names to avoid name mangling
 class kernelFFTPrepareComplexInput;
 class kernelFFTButterfly;
 class kernelFFTFinalReorder;
@@ -17,27 +18,24 @@ class kernelIFFTFinalReorder;
 // >>> import math
 // >>> math.pi
 constexpr double PI = 3.141592653589793;
-constexpr double Θ_FFT_512 = (-2. * PI) / 512.;
-constexpr double Θ_INV_FFT_512 = -Θ_FFT_512;
-constexpr double Θ_FFT_1024 = (-2. * PI) / 1024.;
-constexpr double Θ_INV_FFT_1024 = -Θ_FFT_1024;
 
-// $ python3
-// >>> math.cos((-2 * math.pi) / 512), math.sin((-2 * math.pi) / 512)
-constexpr cmplx ω_fft_512 = cmplx(0.9999247018391445, -0.012271538285719925);
+// Computes cosΘ + isinΘ, where Θ = -2π/ N | N = FFT domain size
+static inline const cmplx
+compute_fft_ω(const size_t dim)
+{
+  return cmplx(std::cos((-2. * PI) / static_cast<double>(dim)),
+               std::sin((-2. * PI) / static_cast<double>(dim)));
+}
 
-// $ python3
-// >>> math.cos((2 * math.pi) / 512), math.sin((2 * math.pi) / 512)
-constexpr cmplx ω_ifft_512 = cmplx(0.9999247018391445, 0.012271538285719925);
+// Computes cosΘ + isinΘ, where Θ = 2π/ N | N = IFFT domain size
+static inline const cmplx
+compute_ifft_ω(const size_t dim)
+{
+  return cmplx(std::cos((2. * PI) / static_cast<double>(dim)),
+               std::sin((2. * PI) / static_cast<double>(dim)));
+}
 
-// $ python3
-// >>> math.cos((-2 * math.pi) / 1024), math.sin((-2 * math.pi) / 1024)
-constexpr cmplx ω_fft_1024 = cmplx(0.9999811752826011, -0.006135884649154475);
-
-// $ python3
-// >>> math.cos((2 * math.pi) / 1024), math.sin((2 * math.pi) / 1024)
-constexpr cmplx ω_ifft_1024 = cmplx(0.9999811752826011, 0.006135884649154475);
-
+// Computes binary logarithm of `n`, when n is power of 2
 const size_t
 bin_log(size_t n)
 {
@@ -61,6 +59,10 @@ bit_rev(const size_t v, const size_t max_bit_width)
   return v_rev;
 }
 
+// Given `n`, computes `m` such that
+//
+// $ python3
+// >>> m = int('0b' + ''.join(reversed(bin(n)[2:])), base=2)
 const size_t
 rev_all_bits(const size_t n)
 {
@@ -86,24 +88,19 @@ permute_index(const size_t idx, const size_t size)
   return rev_all_bits(idx) >> (64ul - bits);
 }
 
-static constexpr bool
-check_fft_domain_size(const size_t dim)
-{
-  return dim == 512 || dim == 1024;
-}
-
-template<size_t dim>
 void
 cooley_tukey_fft(sycl::queue& q,
                  const double* const __restrict src,
                  cmplx* const __restrict dst,
-                 const size_t wg_size) requires(check_fft_domain_size(dim))
+                 const size_t dim,
+                 const size_t wg_size)
 {
   assert((dim & (dim - 1)) == 0); // power of 2 check
   assert(dim >= wg_size);
   assert(dim % wg_size == 0); // all work groups have same # -of work items
 
   const size_t log2dim = bin_log(dim);
+  const cmplx ω_fft = compute_fft_ω(dim);
 
   std::vector<sycl::event> evts;
   evts.reserve(log2dim + 2);
@@ -118,7 +115,7 @@ cooley_tukey_fft(sycl::queue& q,
 
   evts.push_back(evt0);
 
-  for (size_t i = log2dim - 1ul; i >= 0ul; i--) {
+  for (int64_t i = log2dim - 1ul; i >= 0; i--) {
     sycl::event evt1 = q.submit([=](sycl::handler& h) {
       h.depends_on(evts.at(log2dim - (i + 1)));
 
@@ -130,8 +127,7 @@ cooley_tukey_fft(sycl::queue& q,
           const size_t q = dim >> i;
 
           const size_t k_rev = bit_rev(k, log2dim) % q;
-          const cmplx ω = dim == 512 ? std::pow(ω_fft_512, p * k_rev)
-                                     : std::pow(ω_fft_1024, p * k_rev);
+          const cmplx ω = std::pow(ω_fft, p * k_rev);
 
           if (k < (k ^ p)) {
             const cmplx tmp_k = dst[k];
@@ -174,18 +170,20 @@ cooley_tukey_fft(sycl::queue& q,
   evt2.wait();
 }
 
-template<size_t dim>
 void
 cooley_tukey_ifft(sycl::queue& q,
                   const cmplx* const __restrict src,
                   cmplx* const __restrict dst,
-                  const size_t wg_size) requires(check_fft_domain_size(dim))
+                  const size_t dim,
+                  const size_t wg_size)
 {
   assert((dim & (dim - 1)) == 0); // power of 2 check
   assert(dim >= wg_size);
   assert(dim % wg_size == 0); // all work groups have same # -of work items
 
   const size_t log2dim = bin_log(dim);
+  const cmplx ω_ifft = compute_ifft_ω(dim);
+  const double inv_dim = 1. / static_cast<double>(dim);
 
   std::vector<sycl::event> evts;
   evts.reserve(log2dim + 2);
@@ -193,7 +191,7 @@ cooley_tukey_ifft(sycl::queue& q,
   sycl::event evt0 = q.memcpy(dst, src, sizeof(cmplx) * dim);
   evts.push_back(evt0);
 
-  for (size_t i = log2dim - 1ul; i >= 0ul; i--) {
+  for (int64_t i = log2dim - 1ul; i >= 0; i--) {
     sycl::event evt1 = q.submit([=](sycl::handler& h) {
       h.depends_on(evts.at(log2dim - (i + 1)));
 
@@ -205,8 +203,7 @@ cooley_tukey_ifft(sycl::queue& q,
           const size_t q = dim >> i;
 
           const size_t k_rev = bit_rev(k, log2dim) % q;
-          const cmplx ω = dim == 512 ? std::pow(ω_ifft_512, p * k_rev)
-                                     : std::pow(ω_ifft_1024, p * k_rev);
+          const cmplx ω = std::pow(ω_ifft, p * k_rev);
 
           if (k < (k ^ p)) {
             const cmplx tmp_k = dst[k];
@@ -231,16 +228,14 @@ cooley_tukey_ifft(sycl::queue& q,
         const size_t k = it.get_global_linear_id();
         const size_t k_perm = permute_index(k, dim);
 
-        if (k_perm > k) {
-          cmplx a = dst[k];
-          cmplx b = dst[k_perm];
+        if (k_perm == k) {
+          dst[k] *= inv_dim;
+        } else if (k_perm > k) {
+          const cmplx a = dst[k];
+          const cmplx b = dst[k_perm];
 
-          const cmplx tmp = a;
-          a = b;
-          b = tmp;
-
-          dst[k] = a / static_cast<double>(dim);
-          dst[k_perm] = b / static_cast<double>(dim);
+          dst[k] = b * inv_dim;
+          dst[k_perm] = a * inv_dim;
         }
       });
   });
