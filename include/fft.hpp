@@ -88,12 +88,13 @@ permute_index(const size_t idx, const size_t size)
   return rev_all_bits(idx) >> (64ul - bits);
 }
 
-void
+std::vector<sycl::event>
 cooley_tukey_fft(sycl::queue& q,
                  const double* const __restrict src,
                  cmplx* const __restrict dst,
                  const size_t dim,
-                 const size_t wg_size)
+                 const size_t wg_size,
+                 std::vector<sycl::event> dep_evts)
 {
   assert((dim & (dim - 1)) == 0); // power of 2 check
   assert(dim >= wg_size);
@@ -105,13 +106,17 @@ cooley_tukey_fft(sycl::queue& q,
   std::vector<sycl::event> evts;
   evts.reserve(log2dim + 2);
 
-  sycl::event evt0 = q.parallel_for<kernelFFTPrepareComplexInput>(
-    sycl::nd_range<1>{ sycl::range<1>{ dim }, sycl::range<1>{ wg_size } },
-    [=](sycl::nd_item<1> it) {
-      const size_t k = it.get_global_linear_id();
+  sycl::event evt0 = q.submit([&](sycl::handler& h) {
+    h.depends_on(dep_evts);
 
-      dst[k] = cmplx(src[k], 0.);
-    });
+    h.parallel_for<kernelFFTPrepareComplexInput>(
+      sycl::nd_range<1>{ sycl::range<1>{ dim }, sycl::range<1>{ wg_size } },
+      [=](sycl::nd_item<1> it) {
+        const size_t k = it.get_global_linear_id();
+
+        dst[k] = cmplx(src[k], 0.);
+      });
+  });
 
   evts.push_back(evt0);
 
@@ -167,15 +172,17 @@ cooley_tukey_fft(sycl::queue& q,
   });
 
   evts.push_back(evt2);
-  evt2.wait();
+
+  return evts;
 }
 
-void
+std::vector<sycl::event>
 cooley_tukey_ifft(sycl::queue& q,
                   const cmplx* const __restrict src,
                   cmplx* const __restrict dst,
                   const size_t dim,
-                  const size_t wg_size)
+                  const size_t wg_size,
+                  std::vector<sycl::event> dep_evts)
 {
   assert((dim & (dim - 1)) == 0); // power of 2 check
   assert(dim >= wg_size);
@@ -188,7 +195,11 @@ cooley_tukey_ifft(sycl::queue& q,
   std::vector<sycl::event> evts;
   evts.reserve(log2dim + 2);
 
-  sycl::event evt0 = q.memcpy(dst, src, sizeof(cmplx) * dim);
+  sycl::event evt0 = q.submit([&](sycl::handler& h) {
+    h.depends_on(dep_evts);
+
+    h.memcpy(dst, src, sizeof(cmplx) * dim);
+  });
   evts.push_back(evt0);
 
   for (int64_t i = log2dim - 1ul; i >= 0; i--) {
@@ -241,7 +252,8 @@ cooley_tukey_ifft(sycl::queue& q,
   });
 
   evts.push_back(evt2);
-  evt2.wait();
+
+  return evts;
 }
 
 }
