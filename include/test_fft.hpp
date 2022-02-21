@@ -1,20 +1,8 @@
 #pragma once
+#include "common.hpp"
 #include "fft.hpp"
-#include <random>
 
 namespace test {
-
-void
-random_fill(double* const data, const size_t dim)
-{
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_real_distribution<double> dis(-3., 4.);
-
-  for (size_t i = 0; i < dim; i++) {
-    data[i] = dis(gen);
-  }
-}
 
 double
 fft(sycl::queue& q, const size_t dim, const size_t wg_size)
@@ -46,10 +34,8 @@ fft(sycl::queue& q, const size_t dim, const size_t wg_size)
   double max_diff = 0.;
 
   for (size_t i = 0; i < dim; i++) {
-    const double diff = sycl::abs(src[i] - ifft_dst[i].real());
-    if (diff > max_diff) {
-      max_diff = diff;
-    }
+    const double diff = sycl::abs(src[i] - std::round(ifft_dst[i].real()));
+    max_diff = std::max(diff, max_diff);
   }
 
   sycl::free(src, q);
