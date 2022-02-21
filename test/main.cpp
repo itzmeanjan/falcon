@@ -1,4 +1,5 @@
 #include "test_fft.hpp"
+#include "test_polynomial.hpp"
 #include <iostream>
 
 int
@@ -13,10 +14,14 @@ main(int argc, char** argv)
             << std::endl
             << std::endl;
 
-  std::cout << "maximum deviation for fft size  512 :\t"
+  std::cout << "[test] maximum deviation for fft size  512 :\t"
             << test::fft(q, 512, 32) << std::endl;
-  std::cout << "maximum deviation for fft size 1024 :\t"
+  std::cout << "[test] maximum deviation for fft size 1024 :\t"
             << test::fft(q, 1024, 32) << std::endl;
+  std::cout << "[test] maximum deviation for poly-mul size 512 :\t"
+            << test::mul(q, 512, 32) << std::endl;
+  std::cout << "[test] maximum deviation for poly-mul size 1024 :\t"
+            << test::mul(q, 1024, 32) << std::endl;
 
   return EXIT_SUCCESS;
 }
