@@ -7,6 +7,7 @@ class kernelAddCoeffPolynomials;
 class kernelNegatePolynomial;
 class kernelSubCoeffPolynomials;
 class kernelMulCoeffPolynomials;
+class kernelDivCoeffPolynomials;
 
 // Adds two coefficient representation polynomials; see
 // https://github.com/tprest/falcon.py/blob/3a6fe63db658ff88fbdcb52c0899fe171b86370a/fft.py#L96-L100
@@ -102,10 +103,10 @@ sub(sycl::queue& q,
 // https://github.com/tprest/falcon.py/blob/3a6fe63db658ff88fbdcb52c0899fe171b86370a/fft.py#L114-L116
 std::vector<sycl::event>
 mul(sycl::queue& q,
-    const double* const __restrict src_a_coeff,
+    const double* const __restrict src_a_coeff, // input polynomial 1
     fft::cmplx* const __restrict src_a_fft,
     const size_t len_a,
-    const double* const __restrict src_b_coeff,
+    const double* const __restrict src_b_coeff, // input polynomial 2
     fft::cmplx* const __restrict src_b_fft,
     const size_t len_b,
     fft::cmplx* const __restrict dst_coeff, // result is here
@@ -131,6 +132,47 @@ mul(sycl::queue& q,
         const size_t idx = it.get_global_linear_id();
 
         dst_fft[idx] = src_a_fft[idx] * src_b_fft[idx];
+      });
+  });
+
+  std::vector<sycl::event> evts2 =
+    fft::cooley_tukey_ifft(q, dst_fft, dst_coeff, len_dst, wg_size, { evt });
+  return evts2;
+}
+
+// Performs division of two coefficient representation polynomials; see
+// https://github.com/tprest/falcon.py/blob/3a6fe63db658ff88fbdcb52c0899fe171b86370a/fft.py#L119-L121
+std::vector<sycl::event>
+div(sycl::queue& q,
+    const double* const __restrict src_a_coeff, // input polynomial 1
+    fft::cmplx* const __restrict src_a_fft,
+    const size_t len_a,
+    const double* const __restrict src_b_coeff, // input polynomial 2
+    fft::cmplx* const __restrict src_b_fft,
+    const size_t len_b,
+    fft::cmplx* const __restrict dst_coeff, // result is here
+    fft::cmplx* const __restrict dst_fft,
+    const size_t len_dst,
+    const size_t wg_size,
+    std::vector<sycl::event> evts)
+{
+  assert(len_a == len_dst);
+  assert(len_b == len_dst);
+
+  std::vector<sycl::event> evts0 =
+    fft::cooley_tukey_fft(q, src_a_coeff, src_a_fft, len_a, wg_size, evts);
+  std::vector<sycl::event> evts1 =
+    fft::cooley_tukey_fft(q, src_b_coeff, src_b_fft, len_b, wg_size, evts);
+
+  sycl::event evt = q.submit([&](sycl::handler& h) {
+    h.depends_on({ evts0.at(evts0.size() - 1), evts1.at(evts1.size() - 1) });
+
+    h.parallel_for<kernelDivCoeffPolynomials>(
+      sycl::nd_range<1>{ sycl::range<1>{ len_dst }, sycl::range<1>{ wg_size } },
+      [=](sycl::nd_item<1> it) {
+        const size_t idx = it.get_global_linear_id();
+
+        dst_fft[idx] = src_a_fft[idx] / src_b_fft[idx];
       });
   });
 
