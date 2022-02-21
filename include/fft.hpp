@@ -10,6 +10,8 @@ using cmplx = std::complex<double>;
 class kernelFFTPrepareComplexInput;
 class kernelFFTButterfly;
 class kernelFFTFinalReorder;
+class kernelIFFTButterfly;
+class kernelIFFTFinalReorder;
 
 // $ python3
 // >>> import math
@@ -164,6 +166,81 @@ cooley_tukey_fft(sycl::queue& q,
 
           dst[k] = a;
           dst[k_perm] = b;
+        }
+      });
+  });
+
+  evts.push_back(evt2);
+  evt2.wait();
+}
+
+template<size_t dim>
+void
+cooley_tukey_ifft(sycl::queue& q,
+                  const cmplx* const __restrict src,
+                  cmplx* const __restrict dst,
+                  const size_t wg_size) requires(check_fft_domain_size(dim))
+{
+  assert((dim & (dim - 1)) == 0); // power of 2 check
+  assert(dim >= wg_size);
+  assert(dim % wg_size == 0); // all work groups have same # -of work items
+
+  const size_t log2dim = bin_log(dim);
+
+  std::vector<sycl::event> evts;
+  evts.reserve(log2dim + 2);
+
+  sycl::event evt0 = q.memcpy(dst, src, sizeof(cmplx) * dim);
+  evts.push_back(evt0);
+
+  for (size_t i = log2dim - 1ul; i >= 0ul; i--) {
+    sycl::event evt1 = q.submit([=](sycl::handler& h) {
+      h.depends_on(evts.at(log2dim - (i + 1)));
+
+      h.parallel_for<kernelIFFTButterfly>(
+        sycl::nd_range<1>{ sycl::range<1>{ dim }, sycl::range<1>{ wg_size } },
+        [=](sycl::nd_item<1> it) {
+          const size_t k = it.get_global_linear_id();
+          const size_t p = 1ul << i;
+          const size_t q = dim >> i;
+
+          const size_t k_rev = bit_rev(k, log2dim) % q;
+          const cmplx ω = dim == 512 ? std::pow(ω_ifft_512, p * k_rev)
+                                     : std::pow(ω_ifft_1024, p * k_rev);
+
+          if (k < (k ^ p)) {
+            const cmplx tmp_k = dst[k];
+            const cmplx tmp_k_p = dst[k ^ p];
+            const cmplx tmp_k_p_ω = tmp_k_p * ω;
+
+            dst[k] = tmp_k + tmp_k_p_ω;
+            dst[k ^ p] = tmp_k - tmp_k_p_ω;
+          }
+        });
+    });
+
+    evts.push_back(evt1);
+  }
+
+  sycl::event evt2 = q.submit([&](sycl::handler& h) {
+    h.depends_on(evts.at(log2dim));
+
+    h.parallel_for<kernelIFFTFinalReorder>(
+      sycl::nd_range<1>{ sycl::range<1>{ dim }, sycl::range<1>{ wg_size } },
+      [=](sycl::nd_item<1> it) {
+        const size_t k = it.get_global_linear_id();
+        const size_t k_perm = permute_index(k, dim);
+
+        if (k_perm > k) {
+          cmplx a = dst[k];
+          cmplx b = dst[k_perm];
+
+          const cmplx tmp = a;
+          a = b;
+          b = tmp;
+
+          dst[k] = a / static_cast<double>(dim);
+          dst[k_perm] = b / static_cast<double>(dim);
         }
       });
   });
