@@ -37,13 +37,6 @@ constexpr uint32_t TWO_ADICITY = 12;
 // GF(1331, order=12289)
 constexpr uint32_t TWO_ADIC_ROOT_OF_UNITY = 1331;
 
-const uint32_t
-get_root_of_unity(uint32_t n)
-{
-  uint32_t power = 1ul << (TWO_ADICITY - n);
-  return TWO_ADIC_ROOT_OF_UNITY * power;
-}
-
 // Extended GCD algorithm for computing inverse of prime ( = Q ) field element;
 // see https://aszepieniec.github.io/stark-anatomy/basic-tools
 const xgcd_t
@@ -185,6 +178,16 @@ exp(const uint32_t a, const size_t b)
   }
 
   return r % ff::Q;
+}
+
+// Computes root of unity of order `2 ^ n`, such that n > 0 && n <= TWO_ADICITY
+//
+// See
+// https://github.com/novifinancial/winterfell/blob/86d05a2c9e6e43297db30c9822a68b9dfba439e3/math/src/field/traits.rs#L220-L233
+static inline const uint32_t
+get_nth_root_of_unity(const uint32_t n)
+{
+  return exp(TWO_ADIC_ROOT_OF_UNITY, 1ul << (TWO_ADICITY - n));
 }
 
 }
