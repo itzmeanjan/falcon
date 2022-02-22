@@ -16,8 +16,8 @@ constexpr uint32_t Q = 12 * 1024 + 1;
 
 // Extended GCD algorithm for computing inverse of prime ( = Q ) field element;
 // see https://aszepieniec.github.io/stark-anatomy/basic-tools
-xgcd_t
-xgcd(uint32_t x, uint32_t y)
+const xgcd_t
+xgcd(const uint32_t x, const uint32_t y)
 {
   int32_t old_r = static_cast<int32_t>(x), r = static_cast<int32_t>(y);
   int32_t old_s = 1, s = 0;
@@ -43,17 +43,18 @@ xgcd(uint32_t x, uint32_t y)
   return xgcd_t{ old_s, old_t, old_r }; // a, b, g of `ax + by = g`
 }
 
-// Computes multiplicative inverse of prime field element,
-// where a ∈ F_p; p = field modulas; ensure a < p
+// Computes canonical form of multiplicative inverse of prime field element,
+// where a ∈ F_p; p = field modulas; ensure 0 < a < p
 //
 // Say return value of this function is b, then
 //
 // assert (a * b) % p == 1
 const uint32_t
-inv(uint32_t a, // operand to be inverted; must be in `0 < a < p`
-    uint32_t p  // prime field modulas
+inv(const uint32_t a, // operand to be inverted; must be in `0 < a < p`
+    const uint32_t p  // prime field modulas
 )
 {
+  // can't compute multiplicative inverse of 0 in prime field
   if (a == 0) {
     return 0;
   }
@@ -62,9 +63,17 @@ inv(uint32_t a, // operand to be inverted; must be in `0 < a < p`
 
   if (v.a < 0) {
     return p + v.a;
-  } else {
-    return v.a % p;
   }
+
+  return v.a % p;
+}
+
+// Computes canonical form of prime field multiplication of a, b, where both of
+// them belongs to [0, Q)
+const uint32_t
+mul(const uint32_t a, const uint32_t b)
+{
+  return (a * b) % ff::Q;
 }
 
 }
