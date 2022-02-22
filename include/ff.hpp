@@ -14,6 +14,36 @@ typedef struct xgcd_t
 // https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/common.py#L4-L5
 constexpr uint32_t Q = 12 * 1024 + 1;
 
+// Primitive Element of prime field
+// $ python3
+// >>> import galois as gl
+// >>> gf = gl.GF(12289)
+// >>> gf.primitive_element
+// GF(11, order=12289)
+constexpr uint32_t GENERATOR = 11;
+
+// $ python3
+// >>> assert is_odd((Q - 1) >> 12)
+//
+// See
+// https://github.com/novifinancial/winterfell/blob/86d05a2c9e6e43297db30c9822a68b9dfba439e3/math/src/field/f64/mod.rs#L196-L198
+constexpr uint32_t TWO_ADICITY = 12;
+
+// $ python3
+// >>> import galois as gl
+// >>> gf = gl.GF(12289)
+// >>> k = (gf.order - 1) >> 12
+// >>> gf.primitive_element ** k
+// GF(1331, order=12289)
+constexpr uint32_t TWO_ADIC_ROOT_OF_UNITY = 1331;
+
+const uint32_t
+get_root_of_unity(uint32_t n)
+{
+  uint32_t power = 1ul << (TWO_ADICITY - n);
+  return TWO_ADIC_ROOT_OF_UNITY * power;
+}
+
 // Extended GCD algorithm for computing inverse of prime ( = Q ) field element;
 // see https://aszepieniec.github.io/stark-anatomy/basic-tools
 const xgcd_t
@@ -125,6 +155,36 @@ div(const uint32_t a, const uint32_t b)
   }
 
   return mul(a, inv(b));
+}
+
+// Raises field element `a` to `b` -th power; using exponentiation by squaring
+// rule; see
+// https://github.com/itzmeanjan/ff-gpu/blob/89c9719e5897e57e92a3989d7d8c4e120b3aa311/ff_p.cpp#L78-L101
+const uint32_t
+exp(const uint32_t a, const size_t b)
+{
+  if (b == 0) {
+    return 1;
+  }
+  if (b == 1) {
+    return a;
+  }
+  if (a == 0) {
+    return 0;
+  }
+
+  uint32_t base = a;
+  uint32_t r = b & 0b1 ? a : 1;
+
+  // i in 1..64 - power.leading_zeros()
+  for (uint8_t i = 1; i < 64 - sycl::clz(b); i++) {
+    base = mul(base, base);
+    if ((b >> i) & 0b1) {
+      r = mul(r, base);
+    }
+  }
+
+  return r % ff::Q;
 }
 
 }
