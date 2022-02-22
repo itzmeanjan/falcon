@@ -21,19 +21,24 @@ main(int argc, char** argv)
   std::cout << "[test] maximum deviation for fft size 1024 :\t"
             << test::fft(q, 1024, 32) << std::endl;
 
-  std::cout << "[test] maximum deviation for poly-mul size 512 :\t"
+  std::cout << "[test] maximum deviation for poly-mul over R of size  512 :\t"
             << test::mul(q, 512, 32) << std::endl;
-  std::cout << "[test] maximum deviation for poly-mul size 1024 :\t"
+  std::cout << "[test] maximum deviation for poly-mul over R of size 1024 :\t"
             << test::mul(q, 1024, 32) << std::endl;
 
   test::ff_math(q);
-  std::cout << "[test] passed finite field arithmetic test" << std::endl;
+  std::cout << "[test] passed prime ( = 12289 ) field arithmetic test" << std::endl;
 
   test::ntt(q, 512, 32);
-  std::cout << "[test] passed ntt test for size 512" << std::endl;
+  std::cout << "[test] passed ntt test for size  512" << std::endl;
 
   test::ntt(q, 1024, 32);
   std::cout << "[test] passed ntt test for size 1024" << std::endl;
+
+  test::mul_zq(q, 512, 32);
+  std::cout << "[test] passed poly-mul test over Z_q of size  512" << std::endl;
+  test::mul_zq(q, 1024, 32);
+  std::cout << "[test] passed poly-mul test over Z_q of size 1024" << std::endl;
 
   return EXIT_SUCCESS;
 }

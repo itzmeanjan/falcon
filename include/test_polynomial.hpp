@@ -91,4 +91,76 @@ mul(sycl::queue& q, const size_t dim, const size_t wg_size)
   return max_diff;
 }
 
+void
+mul_zq(sycl::queue& q, const size_t dim, const size_t wg_size)
+{
+  const size_t i_size = sizeof(uint32_t) * dim;
+  const size_t o_size = sizeof(uint32_t) * dim;
+
+  uint32_t* src_f_coef = static_cast<uint32_t*>(sycl::malloc_shared(i_size, q));
+  uint32_t* src_g_coef = static_cast<uint32_t*>(sycl::malloc_shared(i_size, q));
+  uint32_t* src_h_coef = static_cast<uint32_t*>(sycl::malloc_shared(i_size, q));
+  uint32_t* dst_coef = static_cast<uint32_t*>(sycl::malloc_shared(o_size, q));
+  uint32_t* src_f_fft = static_cast<uint32_t*>(sycl::malloc_shared(o_size, q));
+  uint32_t* src_g_fft = static_cast<uint32_t*>(sycl::malloc_shared(o_size, q));
+  uint32_t* src_h_fft = static_cast<uint32_t*>(sycl::malloc_shared(o_size, q));
+  uint32_t* dst_fft = static_cast<uint32_t*>(sycl::malloc_shared(o_size, q));
+
+  random_fill(src_f_coef, dim);
+  random_fill(src_g_coef, dim);
+
+  sycl::event evt0 = q.memset(src_f_fft, 0, o_size);
+  sycl::event evt1 = q.memset(src_g_fft, 0, o_size);
+  sycl::event evt2 = q.memset(dst_fft, 0, o_size);
+  sycl::event evt3 = q.memset(dst_coef, 0, i_size);
+
+  std::vector<sycl::event> evts0 = polynomial::mul(q,
+                                                   src_f_coef,
+                                                   src_f_fft,
+                                                   dim,
+                                                   src_g_coef,
+                                                   src_g_fft,
+                                                   dim,
+                                                   dst_coef,
+                                                   dst_fft,
+                                                   dim,
+                                                   wg_size,
+                                                   { evt0, evt1, evt2, evt3 });
+
+  sycl::event evt4 = q.submit([&](sycl::handler& h) {
+    h.depends_on(evts0.at(evts0.size() - 1));
+
+    h.memcpy(src_h_coef, dst_coef, sizeof(uint32_t) * dim);
+  });
+
+  sycl::event evt5 = q.memset(src_h_fft, 0, o_size);
+  std::vector<sycl::event> evts1 = polynomial::div(q,
+                                                   src_h_coef,
+                                                   src_h_fft,
+                                                   dim,
+                                                   src_f_coef,
+                                                   src_f_fft,
+                                                   dim,
+                                                   dst_coef,
+                                                   dst_fft,
+                                                   dim,
+                                                   wg_size,
+                                                   { evt4, evt5 });
+
+  evts1.at(evts1.size() - 1).wait();
+
+  for (size_t i = 0; i < dim; i++) {
+    assert(src_g_coef[i] == dst_coef[i]);
+  }
+
+  sycl::free(src_f_coef, q);
+  sycl::free(src_g_coef, q);
+  sycl::free(src_h_coef, q);
+  sycl::free(src_f_fft, q);
+  sycl::free(src_g_fft, q);
+  sycl::free(src_h_fft, q);
+  sycl::free(dst_coef, q);
+  sycl::free(dst_fft, q);
+}
+
 }
