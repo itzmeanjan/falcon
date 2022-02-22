@@ -29,3 +29,17 @@ random_fill(uint32_t* const data, const size_t dim)
     data[i] = dis(gen);
   }
 }
+
+// Computes binary logarithm of `n`, when n is power of 2
+const size_t
+bin_log(size_t n)
+{
+  size_t cnt = 0ul;
+
+  while (n > 1ul) {
+    cnt++;
+    n >>= 1;
+  }
+
+  return cnt;
+}

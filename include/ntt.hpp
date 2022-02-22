@@ -1,39 +1,30 @@
 #pragma once
 #include "common.hpp"
-#include <CL/sycl.hpp>
+#include "ff.hpp"
 #include <cassert>
-#include <complex>
 
-namespace fft {
-
-using cmplx = std::complex<double>;
+namespace ntt {
 
 // Predeclaring kernel names to avoid name mangling
-class kernelFFTPrepareComplexInput;
-class kernelFFTButterfly;
-class kernelFFTFinalReorder;
-class kernelIFFTButterfly;
-class kernelIFFTFinalReorder;
+class kernelNTTButterfly;
+class kernelNTTFinalReorder;
+class kernelINTTButterfly;
+class kernelINTTFinalReorder;
 
-// $ python3
-// >>> import math
-// >>> math.pi
-constexpr double PI = 3.141592653589793;
-
-// Computes cosΘ + isinΘ, where Θ = -2π/ N | N = FFT domain size
-static inline const cmplx
-compute_fft_ω(const size_t dim)
+// See
+// https://github.com/itzmeanjan/ff-gpu/blob/89c9719e5897e57e92a3989d7d8c4e120b3aa311/ntt.cpp#L10-L19
+static inline const uint32_t
+compute_ntt_ω(const size_t dim)
 {
-  return cmplx(std::cos((-2. * PI) / static_cast<double>(dim)),
-               std::sin((-2. * PI) / static_cast<double>(dim)));
+  return ff::get_nth_root_of_unity(bin_log(dim));
 }
 
-// Computes cosΘ + isinΘ, where Θ = 2π/ N | N = IFFT domain size
-static inline const cmplx
-compute_ifft_ω(const size_t dim)
+// See
+// https://github.com/itzmeanjan/ff-gpu/blob/89c9719e5897e57e92a3989d7d8c4e120b3aa311/ntt.cpp#L21-L30
+static inline const uint32_t
+compute_intt_ω(const size_t dim)
 {
-  return cmplx(std::cos((2. * PI) / static_cast<double>(dim)),
-               std::sin((2. * PI) / static_cast<double>(dim)));
+  return ff::inv(ff::get_nth_root_of_unity(bin_log(dim)));
 }
 
 const size_t
@@ -76,9 +67,9 @@ permute_index(const size_t idx, const size_t size)
 }
 
 std::vector<sycl::event>
-cooley_tukey_fft(sycl::queue& q,
-                 const double* const __restrict src,
-                 cmplx* const __restrict dst,
+cooley_tukey_ntt(sycl::queue& q,
+                 const uint32_t* const __restrict src,
+                 uint32_t* const __restrict dst,
                  const size_t dim,
                  const size_t wg_size,
                  std::vector<sycl::event> dep_evts)
@@ -88,21 +79,14 @@ cooley_tukey_fft(sycl::queue& q,
   assert(dim % wg_size == 0); // all work groups have same # -of work items
 
   const size_t log2dim = bin_log(dim);
-  const cmplx ω_fft = compute_fft_ω(dim);
+  const uint32_t ω_ntt = compute_ntt_ω(dim);
 
   std::vector<sycl::event> evts;
   evts.reserve(log2dim + 2);
 
   sycl::event evt0 = q.submit([&](sycl::handler& h) {
     h.depends_on(dep_evts);
-
-    h.parallel_for<kernelFFTPrepareComplexInput>(
-      sycl::nd_range<1>{ sycl::range<1>{ dim }, sycl::range<1>{ wg_size } },
-      [=](sycl::nd_item<1> it) {
-        const size_t k = it.get_global_linear_id();
-
-        dst[k] = cmplx(src[k], 0.);
-      });
+    h.memcpy(dst, src, sizeof(uint32_t) * dim);
   });
 
   evts.push_back(evt0);
@@ -111,7 +95,7 @@ cooley_tukey_fft(sycl::queue& q,
     sycl::event evt1 = q.submit([=](sycl::handler& h) {
       h.depends_on(evts.at(log2dim - (i + 1)));
 
-      h.parallel_for<kernelFFTButterfly>(
+      h.parallel_for<kernelNTTButterfly>(
         sycl::nd_range<1>{ sycl::range<1>{ dim }, sycl::range<1>{ wg_size } },
         [=](sycl::nd_item<1> it) {
           const size_t k = it.get_global_linear_id();
@@ -119,15 +103,15 @@ cooley_tukey_fft(sycl::queue& q,
           const size_t q = dim >> i;
 
           const size_t k_rev = bit_rev(k, log2dim) % q;
-          const cmplx ω = std::pow(ω_fft, p * k_rev);
+          const uint32_t ω = ff::exp(ω_ntt, p * k_rev);
 
           if (k < (k ^ p)) {
-            const cmplx tmp_k = dst[k];
-            const cmplx tmp_k_p = dst[k ^ p];
-            const cmplx tmp_k_p_ω = tmp_k_p * ω;
+            const uint32_t tmp_k = dst[k];
+            const uint32_t tmp_k_p = dst[k ^ p];
+            const uint32_t tmp_k_p_ω = ff::mul(tmp_k_p, ω);
 
-            dst[k] = tmp_k + tmp_k_p_ω;
-            dst[k ^ p] = tmp_k - tmp_k_p_ω;
+            dst[k] = ff::add(tmp_k, tmp_k_p_ω);
+            dst[k ^ p] = ff::sub(tmp_k, tmp_k_p_ω);
           }
         });
     });
@@ -138,22 +122,18 @@ cooley_tukey_fft(sycl::queue& q,
   sycl::event evt2 = q.submit([&](sycl::handler& h) {
     h.depends_on(evts.at(log2dim));
 
-    h.parallel_for<kernelFFTFinalReorder>(
+    h.parallel_for<kernelNTTFinalReorder>(
       sycl::nd_range<1>{ sycl::range<1>{ dim }, sycl::range<1>{ wg_size } },
       [=](sycl::nd_item<1> it) {
         const size_t k = it.get_global_linear_id();
         const size_t k_perm = permute_index(k, dim);
 
         if (k_perm > k) {
-          cmplx a = dst[k];
-          cmplx b = dst[k_perm];
+          const uint32_t a = dst[k];
+          const uint32_t b = dst[k_perm];
 
-          const cmplx tmp = a;
-          a = b;
-          b = tmp;
-
-          dst[k] = a;
-          dst[k_perm] = b;
+          dst[k] = b;
+          dst[k_perm] = a;
         }
       });
   });
@@ -164,9 +144,9 @@ cooley_tukey_fft(sycl::queue& q,
 }
 
 std::vector<sycl::event>
-cooley_tukey_ifft(sycl::queue& q,
-                  const cmplx* const __restrict src,
-                  cmplx* const __restrict dst,
+cooley_tukey_intt(sycl::queue& q,
+                  const uint32_t* const __restrict src,
+                  uint32_t* const __restrict dst,
                   const size_t dim,
                   const size_t wg_size,
                   std::vector<sycl::event> dep_evts)
@@ -176,24 +156,24 @@ cooley_tukey_ifft(sycl::queue& q,
   assert(dim % wg_size == 0); // all work groups have same # -of work items
 
   const size_t log2dim = bin_log(dim);
-  const cmplx ω_ifft = compute_ifft_ω(dim);
-  const double inv_dim = 1. / static_cast<double>(dim);
+  const uint32_t ω_intt = compute_intt_ω(dim);
+  const uint32_t inv_dim = ff::inv(dim);
 
   std::vector<sycl::event> evts;
   evts.reserve(log2dim + 2);
 
   sycl::event evt0 = q.submit([&](sycl::handler& h) {
     h.depends_on(dep_evts);
-
-    h.memcpy(dst, src, sizeof(cmplx) * dim);
+    h.memcpy(dst, src, sizeof(uint32_t) * dim);
   });
+
   evts.push_back(evt0);
 
   for (int64_t i = log2dim - 1ul; i >= 0; i--) {
     sycl::event evt1 = q.submit([=](sycl::handler& h) {
       h.depends_on(evts.at(log2dim - (i + 1)));
 
-      h.parallel_for<kernelIFFTButterfly>(
+      h.parallel_for<kernelINTTButterfly>(
         sycl::nd_range<1>{ sycl::range<1>{ dim }, sycl::range<1>{ wg_size } },
         [=](sycl::nd_item<1> it) {
           const size_t k = it.get_global_linear_id();
@@ -201,15 +181,15 @@ cooley_tukey_ifft(sycl::queue& q,
           const size_t q = dim >> i;
 
           const size_t k_rev = bit_rev(k, log2dim) % q;
-          const cmplx ω = std::pow(ω_ifft, p * k_rev);
+          const uint32_t ω = ff::exp(ω_intt, p * k_rev);
 
           if (k < (k ^ p)) {
-            const cmplx tmp_k = dst[k];
-            const cmplx tmp_k_p = dst[k ^ p];
-            const cmplx tmp_k_p_ω = tmp_k_p * ω;
+            const uint32_t tmp_k = dst[k];
+            const uint32_t tmp_k_p = dst[k ^ p];
+            const uint32_t tmp_k_p_ω = ff::mul(tmp_k_p, ω);
 
-            dst[k] = tmp_k + tmp_k_p_ω;
-            dst[k ^ p] = tmp_k - tmp_k_p_ω;
+            dst[k] = ff::add(tmp_k, tmp_k_p_ω);
+            dst[k ^ p] = ff::sub(tmp_k, tmp_k_p_ω);
           }
         });
     });
@@ -220,20 +200,20 @@ cooley_tukey_ifft(sycl::queue& q,
   sycl::event evt2 = q.submit([&](sycl::handler& h) {
     h.depends_on(evts.at(log2dim));
 
-    h.parallel_for<kernelIFFTFinalReorder>(
+    h.parallel_for<kernelINTTFinalReorder>(
       sycl::nd_range<1>{ sycl::range<1>{ dim }, sycl::range<1>{ wg_size } },
       [=](sycl::nd_item<1> it) {
         const size_t k = it.get_global_linear_id();
         const size_t k_perm = permute_index(k, dim);
 
         if (k_perm == k) {
-          dst[k] *= inv_dim;
+          dst[k] = ff::mul(dst[k], inv_dim);
         } else if (k_perm > k) {
-          const cmplx a = dst[k];
-          const cmplx b = dst[k_perm];
+          const uint32_t a = dst[k];
+          const uint32_t b = dst[k_perm];
 
-          dst[k] = b * inv_dim;
-          dst[k_perm] = a * inv_dim;
+          dst[k] = ff::mul(b, inv_dim);
+          dst[k_perm] = ff::mul(a, inv_dim);
         }
       });
   });
