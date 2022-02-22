@@ -1,5 +1,6 @@
 #include "test_ff.hpp"
 #include "test_fft.hpp"
+#include "test_ntt.hpp"
 #include "test_polynomial.hpp"
 #include <iostream>
 
@@ -19,13 +20,20 @@ main(int argc, char** argv)
             << test::fft(q, 512, 32) << std::endl;
   std::cout << "[test] maximum deviation for fft size 1024 :\t"
             << test::fft(q, 1024, 32) << std::endl;
+
   std::cout << "[test] maximum deviation for poly-mul size 512 :\t"
             << test::mul(q, 512, 32) << std::endl;
   std::cout << "[test] maximum deviation for poly-mul size 1024 :\t"
             << test::mul(q, 1024, 32) << std::endl;
 
   test::ff_math(q);
-  std::cout << "[test] passed finite field arithmetic" << std::endl;
+  std::cout << "[test] passed finite field arithmetic test" << std::endl;
+
+  test::ntt(q, 512, 32);
+  std::cout << "[test] passed ntt test for size 512" << std::endl;
+
+  test::ntt(q, 1024, 32);
+  std::cout << "[test] passed ntt test for size 1024" << std::endl;
 
   return EXIT_SUCCESS;
 }
