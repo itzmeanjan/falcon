@@ -47,6 +47,15 @@ constexpr uint64_t C[13] = { 0x00000004741183A3ul, 0x00000036548CFC06ul,
                              0x400000000002B400ul, 0x7FFFFFFFFFFF4800ul,
                              0x8000000000000000ul };
 
+// $ python3
+// >>> import math
+// >>> math.log(2)
+constexpr double LN2 = 0.6931471805599453;
+// $ python3
+// >>> import math
+// >>> 1/ math.log(2)
+constexpr double ILN2 = 1.4426950408889634;
+
 // See algorithm 12 of Falcon specification https://falcon-sign.info/falcon.pdf;
 // you may also want to see
 // https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/samplerz.py#L65-L76
@@ -101,6 +110,29 @@ approx_exp(const double x, const double ccs)
 
   z = static_cast<uint64_t>(ccs * (1ul << 63)) << 1;
   return top_63_bits(y, z);
+}
+
+// Returns a single bit = 1, with probability ≈ ccs * exp(−x)
+//
+// See algorithm 14 in Falcon specification https://falcon-sign.info/falcon.pdf
+const bool
+ber_exp(const double x, const double ccs)
+{
+  uint64_t s = static_cast<uint64_t>(x * ILN2);
+  double r = x - static_cast<double>(s) * LN2;
+  s = sycl::min(63ul, s);
+
+  uint64_t z = (approx_exp(r, ccs) - 1) >> s;
+  int64_t w = 0;
+
+  for (int64_t i = 56; w == 0 && i > -8; i -= 8) {
+    uint8_t p;
+    random_bytes(1, &p);
+
+    w = p - ((z >> i) & 0xff);
+  }
+
+  return w < 0;
 }
 
 }
