@@ -3,6 +3,7 @@
 #include "test_karatsuba.hpp"
 #include "test_ntt.hpp"
 #include "test_polynomial.hpp"
+#include "test_u72.hpp"
 #include <iostream>
 
 int
@@ -44,6 +45,9 @@ main(int argc, char** argv)
 
   test::karatsuba(q);
   std::cout << "[test] passed karatsuba polynomial multiplication" << std::endl;
+
+  test::u72_ops();
+  std::cout << "[test] passed u72 ops" << std::endl;
 
   return EXIT_SUCCESS;
 }
