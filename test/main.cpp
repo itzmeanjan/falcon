@@ -1,5 +1,6 @@
 #include "test_ff.hpp"
 #include "test_fft.hpp"
+#include "test_karatsuba.hpp"
 #include "test_ntt.hpp"
 #include "test_polynomial.hpp"
 #include <iostream>
@@ -27,7 +28,8 @@ main(int argc, char** argv)
             << test::mul(q, 1024, 32) << std::endl;
 
   test::ff_math(q);
-  std::cout << "[test] passed prime ( = 12289 ) field arithmetic test" << std::endl;
+  std::cout << "[test] passed prime ( = 12289 ) field arithmetic test"
+            << std::endl;
 
   test::ntt(q, 512, 32);
   std::cout << "[test] passed ntt test for size  512" << std::endl;
@@ -39,6 +41,9 @@ main(int argc, char** argv)
   std::cout << "[test] passed poly-mul test over Z_q of size  512" << std::endl;
   test::mul_zq(q, 1024, 32);
   std::cout << "[test] passed poly-mul test over Z_q of size 1024" << std::endl;
+
+  test::karatsuba(q);
+  std::cout << "[test] passed karatsuba polynomial multiplication" << std::endl;
 
   return EXIT_SUCCESS;
 }
