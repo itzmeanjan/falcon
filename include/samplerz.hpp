@@ -8,7 +8,7 @@ namespace samplerz {
 // See
 // https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/samplerz.py#L9-L11
 constexpr double MAX_SIGMA = 1.8205;
-constexpr double INV_2SIGMA2 = 1.0 / (2 * (MAX_SIGMA * MAX_SIGMA));
+constexpr double INV_SIGMA2 = 1. / (2. * MAX_SIGMA * MAX_SIGMA);
 
 // Bit precision of RCDT
 // See
@@ -133,6 +133,35 @@ ber_exp(const double x, const double ccs)
   }
 
   return w < 0;
+}
+
+// Sampling an integer z ∈ Z from a distribution very close to D{Z, μ, σ′}
+//
+// See algorithm 15 in Falcon specification https://falcon-sign.info/falcon.pdf
+const int32_t
+samplerz(const double mu, const double sigma, const double sigmin)
+{
+  const int32_t s = static_cast<int32_t>(mu);
+  const double r = mu - static_cast<double>(s);
+  const double dss = 1. / (2. * sigma * sigma);
+  const double ccs = sigmin / sigma;
+
+  while (true) {
+    const uint32_t z0 = base_sampler();
+
+    uint8_t b;
+    random_bytes(1, &b);
+    b &= 0b1; // keep only last bit
+
+    const int32_t z = (uint32_t)b + (((uint32_t)b << 1) - 1) * z0;
+
+    const double zr = ((double)z - r);
+    const double x = (zr * zr) * dss - ((double)(z0 * z0)) * INV_SIGMA2;
+
+    if (ber_exp(x, ccs)) {
+      return z + s;
+    }
+  }
 }
 
 }
