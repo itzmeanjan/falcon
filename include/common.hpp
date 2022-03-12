@@ -43,3 +43,17 @@ bin_log(size_t n)
 
   return cnt;
 }
+
+// Returns `n` -many pseudorandom bytes, which are stored in allocated
+// memory ( designated by `bytes` )
+void
+random_bytes(const size_t n, uint8_t* const bytes)
+{
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<uint8_t> dis(0, 255);
+
+  for (size_t i = 0; i < n; i++) {
+    bytes[i] = dis(gen);
+  }
+}
