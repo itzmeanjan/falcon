@@ -1,6 +1,7 @@
 #pragma once
 #include "common.hpp"
 #include "u72.hpp"
+#include <oneapi/dpl/random>
 
 namespace samplerz {
 
@@ -17,7 +18,7 @@ constexpr uint64_t RCDT_PREC = 72;
 
 // Reverse cumulative distribution table, taken from column three of table 3.1
 // of Falcon specification https://falcon-sign.info/falcon.pdf
-const std::string RCDT[19] = { "3024686241123004913666",
+const char* const RCDT[19] = { "3024686241123004913666",
                                "1564742784480091954050",
                                "636254429462080897535",
                                "199560484645026482916",
@@ -36,6 +37,11 @@ const std::string RCDT[19] = { "3024686241123004913666",
                                "198",
                                "1",
                                "0" };
+
+// See RCDT table; RCDT_LEN[i] = len(RCDT[i]) | i = {0, 1, 2, ... 17, 18}
+const size_t RCDT_LEN[19] = { 22ul, 22ul, 21ul, 21ul, 20ul, 19ul, 19ul,
+                              18ul, 16ul, 15ul, 14ul, 12ul, 11ul, 9ul,
+                              7ul,  5ul,  3ul,  1ul,  1ul };
 
 // Constants taken from step 1 of algorithm 13 in Falcon specification
 // https://falcon-sign.info/falcon.pdf
@@ -60,18 +66,19 @@ constexpr double ILN2 = 1.4426950408889634;
 // you may also want to see
 // https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/samplerz.py#L65-L76
 const uint32_t
-base_sampler()
+base_sampler(oneapi::dpl::minstd_rand eng,
+             oneapi::dpl::uniform_int_distribution<uint8_t> dis)
 {
-  std::array<uint8_t, 9> bytes;
-  random_bytes(bytes.size(), bytes.data());
+  uint8_t bytes[9];
+  for (size_t i = 0; i < 9; i++) {
+    bytes[i] = dis(eng);
+  }
 
-  const u72::u72 u = u72::from_decimal(bytes.data());
+  const u72::u72 u = u72::from_decimal(bytes);
   uint32_t z0 = 0;
 
-  auto v = RCDT[0];
-
   for (size_t i = 0; i < 19; i++) {
-    u72::u72 v = u72::from_decimal(RCDT[i].data(), RCDT[i].size());
+    u72::u72 v = u72::from_decimal(RCDT[i], RCDT_LEN[i]);
 
     z0 += (u72::cmp(u, v) == -1); // u < v ? 1 : 0
   }
@@ -116,7 +123,10 @@ approx_exp(const double x, const double ccs)
 //
 // See algorithm 14 in Falcon specification https://falcon-sign.info/falcon.pdf
 const bool
-ber_exp(const double x, const double ccs)
+ber_exp(const double x,
+        const double ccs,
+        oneapi::dpl::minstd_rand eng,
+        oneapi::dpl::uniform_int_distribution<uint8_t> dis)
 {
   uint64_t s = static_cast<uint64_t>(x * ILN2);
   double r = x - static_cast<double>(s) * LN2;
@@ -125,9 +135,8 @@ ber_exp(const double x, const double ccs)
   uint64_t z = (approx_exp(r, ccs) - 1) >> s;
   int64_t w = 0;
 
-  for (int64_t i = 56; w == 0 && i > -8; i -= 8) {
-    uint8_t p;
-    random_bytes(1, &p);
+  for (int64_t i = 56; w >= 0 && i > -8; i -= 8) {
+    uint8_t p = dis(eng);
 
     w = p - ((z >> i) & 0xff);
   }
@@ -139,7 +148,11 @@ ber_exp(const double x, const double ccs)
 //
 // See algorithm 15 in Falcon specification https://falcon-sign.info/falcon.pdf
 const int32_t
-samplerz(const double mu, const double sigma, const double sigmin)
+samplerz(const double mu,
+         const double sigma,
+         const double sigmin,
+         oneapi::dpl::minstd_rand eng,
+         oneapi::dpl::uniform_int_distribution<uint8_t> dis)
 {
   const int32_t s = static_cast<int32_t>(mu);
   const double r = mu - static_cast<double>(s);
@@ -147,10 +160,9 @@ samplerz(const double mu, const double sigma, const double sigmin)
   const double ccs = sigmin / sigma;
 
   while (true) {
-    const uint32_t z0 = base_sampler();
+    const uint32_t z0 = base_sampler(eng, dis);
 
-    uint8_t b;
-    random_bytes(1, &b);
+    uint8_t b = dis(eng);
     b &= 0b1; // keep only last bit
 
     const int32_t z = (uint32_t)b + (((uint32_t)b << 1) - 1) * z0;
@@ -158,7 +170,7 @@ samplerz(const double mu, const double sigma, const double sigmin)
     const double zr = ((double)z - r);
     const double x = (zr * zr) * dss - ((double)(z0 * z0)) * INV_SIGMA2;
 
-    if (ber_exp(x, ccs)) {
+    if (ber_exp(x, ccs, eng, dis)) {
       return z + s;
     }
   }
