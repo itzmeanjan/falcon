@@ -1,5 +1,6 @@
 #pragma once
 #include "ff.hpp"
+#include <oneapi/dpl/random>
 #include <random>
 
 // Fill host accessible memory allocation with `dim` -many
@@ -47,13 +48,17 @@ bin_log(size_t n)
 // Returns `n` -many pseudorandom bytes, which are stored in allocated
 // memory ( designated by `bytes` )
 void
-random_bytes(const size_t n, uint8_t* const bytes)
+random_bytes(const size_t n,
+             uint8_t* const bytes,
+             const size_t seed,
+             const size_t offset // idx.get_global_linear_id()
+)
 {
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<uint8_t> dis(0, 255);
+  // on device pseudo random number generation
+  oneapi::dpl::minstd_rand eng{ seed, offset };
+  oneapi::dpl::uniform_int_distribution<uint8_t> dis;
 
   for (size_t i = 0; i < n; i++) {
-    bytes[i] = dis(gen);
+    bytes[i] = dis(eng);
   }
 }

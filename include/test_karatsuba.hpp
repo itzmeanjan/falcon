@@ -3,8 +3,8 @@
 
 namespace test {
 
-// Tests data-parallel karatsuba polynomial multiplication implementation, **in a
-// static manner**
+// Tests data-parallel karatsuba polynomial multiplication implementation, **in
+// a static manner**
 //
 // @todo Improve test such that it can work for other input sizes and values.
 void
