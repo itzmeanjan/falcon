@@ -1,6 +1,7 @@
 #include "test_ff.hpp"
 #include "test_fft.hpp"
 #include "test_karatsuba.hpp"
+#include "test_ntru_gen.hpp"
 #include "test_ntt.hpp"
 #include "test_polynomial.hpp"
 #include "test_u72.hpp"
@@ -48,6 +49,10 @@ main(int argc, char** argv)
 
   test::u72_ops();
   std::cout << "[test] passed u72 ops" << std::endl;
+
+  test::sqnorm(q, 512, 32);
+  test::sqnorm(q, 1024, 32);
+  std::cout << "[test] passed polynomial coefficient norm compute" << std::endl;
 
   return EXIT_SUCCESS;
 }
