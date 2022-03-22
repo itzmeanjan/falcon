@@ -75,4 +75,44 @@ gen_poly(sycl::queue& q,
   return { evt0, evt1 };
 }
 
+// Computes square euclidean norm of a polynomial using atomic operations
+//
+// See
+// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/common.py#L39-L45
+std::vector<sycl::event>
+sqnorm(sycl::queue& q,
+       const int32_t* const __restrict poly,
+       const size_t len_poly,
+       uint32_t* const norm_poly,
+       const size_t wg_size,
+       std::vector<sycl::event> evts)
+{
+  assert(len_poly % wg_size == 0);
+
+  sycl::event evt0 = q.submit([&](sycl::handler& h) {
+    h.depends_on(evts);
+    h.memset(norm_poly, 0, sizeof(uint32_t));
+  });
+
+  sycl::event evt1 = q.submit([&](sycl::handler& h) {
+    h.depends_on(evt0);
+    h.parallel_for(
+      sycl::nd_range<1>{ len_poly, wg_size }, [=](sycl::nd_item<1> it) {
+        const size_t idx = it.get_global_linear_id();
+        const int32_t coeff = poly[idx];
+
+        sycl::ext::oneapi::atomic_ref<
+          uint32_t,
+          sycl::memory_order_relaxed,
+          sycl::memory_scope_device,
+          sycl::access::address_space::ext_intel_global_device_space>
+          norm_ref{ norm_poly[0] };
+
+        norm_ref.fetch_add(static_cast<uint32_t>(coeff * coeff));
+      });
+  });
+
+  return { evt0, evt1 };
+}
+
 }
