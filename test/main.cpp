@@ -6,6 +6,7 @@
 #include "test_polynomial.hpp"
 #include "test_samplerz.hpp"
 #include "test_u72.hpp"
+#include "test_utils.hpp"
 #include <iomanip>
 #include <iostream>
 
@@ -68,6 +69,9 @@ main(int argc, char** argv)
   std::cout << "[test] squared gram-schmidt norm of NTRU matrix : " << gsn_1
             << std::setw(16) << std::right << "[ " << itr_cnt << " iterations ]"
             << std::endl;
+
+  test::is_nonzero_coeff(q, 1024, 32);
+  std::cout << "[test] passed non-zero polynomial coefficient test" << std::endl;
 
   return EXIT_SUCCESS;
 }

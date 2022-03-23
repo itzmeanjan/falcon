@@ -75,7 +75,7 @@ is_nonzero_coeff(
   const uint32_t* const __restrict poly,
   const size_t len,
   const size_t wg_size,
-  uint8_t* const __restrict nonzero_cnt, // must be initialised to `1` ( true )
+  uint32_t* const __restrict nonzero, // must be initialised to `1` ( true )
   std::vector<sycl::event> evts)
 {
   assert(len % wg_size == 0);
@@ -87,13 +87,13 @@ is_nonzero_coeff(
       const uint32_t elm = poly[idx];
 
       sycl::ext::oneapi::atomic_ref<
-        uint8_t,
+        uint32_t,
         sycl::memory_order_relaxed,
         sycl::memory_scope_device,
         sycl::access::address_space::ext_intel_global_device_space>
-        nonzero_cnt_ref{ nonzero_cnt[0] };
+        nonzero_ref{ nonzero[0] };
 
-      nonzero_cnt_ref.fetch_and(static_cast<uint8_t>(elm != 0u));
+      nonzero_ref.fetch_and(static_cast<uint32_t>(elm != 0u));
     });
   });
 }
