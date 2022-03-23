@@ -74,7 +74,30 @@ base_sampler(oneapi::dpl::minstd_rand eng,
     bytes[i] = dis(eng);
   }
 
-  const u72::u72 u = u72::from_decimal(bytes);
+  const u72::u72 u = u72::from_bytes(bytes);
+  uint32_t z0 = 0;
+
+  for (size_t i = 0; i < 19; i++) {
+    u72::u72 v = u72::from_decimal(RCDT[i], RCDT_LEN[i]);
+
+    z0 += (u72::cmp(u, v) == -1); // u < v ? 1 : 0
+  }
+
+  return z0;
+}
+
+// Note, this implementation is strictly for testing correctness of samplerz
+// implementation; random bytes are pre-generated, taken from Falcon
+// specification's table 3.2
+//
+// See algorithm 12 of Falcon specification https://falcon-sign.info/falcon.pdf;
+// you may also want to see
+// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/samplerz.py#L65-L76
+const uint32_t
+base_sampler(uint8_t* const bytes // 9 bytes are passed
+)
+{
+  const u72::u72 u = u72::from_bytes(bytes);
   uint32_t z0 = 0;
 
   for (size_t i = 0; i < 19; i++) {
@@ -129,17 +152,51 @@ ber_exp(const double x,
         oneapi::dpl::uniform_int_distribution<uint8_t> dis)
 {
   uint64_t s = static_cast<uint64_t>(x * ILN2);
-  double r = x - static_cast<double>(s) * LN2;
   s = sycl::min(63ul, s);
+
+  double r = x - static_cast<double>(s) * LN2;
 
   uint64_t z = (approx_exp(r, ccs) - 1) >> s;
   int64_t w = 0;
 
-  for (int64_t i = 56; w >= 0 && i > -8; i -= 8) {
-    uint8_t p = dis(eng);
-
-    w = p - ((z >> i) & 0xff);
+  for (int64_t i = 56; w == 0 && i > -8; i -= 8) {
+    uint8_t b = dis(eng);
+    w = b - ((z >> i) & 0xff);
   }
+
+  return w < 0;
+}
+
+// Note, this implementation is strictly for testing correctness of samplerz
+// implementation; random bytes are pre-generated, taken from Falcon
+// specification's table 3.2
+//
+// Returns a single bit = 1, with probability ≈ ccs * exp(−x)
+//
+// See algorithm 14 in Falcon specification https://falcon-sign.info/falcon.pdf
+const bool
+ber_exp(const double x,
+        const double ccs,
+        const uint8_t* const __restrict bytes,
+        size_t* const __restrict used_bytes)
+{
+  uint64_t s = static_cast<uint64_t>(x * ILN2);
+  s = sycl::min(63ul, s);
+
+  double r = x - static_cast<double>(s) * LN2;
+
+  uint64_t z = (approx_exp(r, ccs) - 1) >> s;
+  int64_t w = 0;
+
+  size_t b_idx = 0;
+  for (int64_t i = 56; w == 0 && i > -8; i -= 8) {
+    w = bytes[b_idx++] - ((z >> i) & 0xff);
+  }
+
+  // these many bytes were consumed; read last line of page 43 of Falcon
+  // specification https://falcon-sign.info/falcon.pdf; you'll understand why
+  // it's necessary to keep track of it that how many bytes were used
+  *used_bytes = b_idx;
 
   return w < 0;
 }
@@ -154,16 +211,17 @@ samplerz(const double mu,
          oneapi::dpl::minstd_rand eng,
          oneapi::dpl::uniform_int_distribution<uint8_t> dis)
 {
-  const int32_t s = static_cast<int32_t>(mu);
+  const int32_t s = static_cast<int32_t>(sycl::floor(mu));
   const double r = mu - static_cast<double>(s);
   const double dss = 1. / (2. * sigma * sigma);
   const double ccs = sigmin / sigma;
+  const uint8_t one = 0b1;
 
   while (true) {
     const uint32_t z0 = base_sampler(eng, dis);
 
     uint8_t b = dis(eng);
-    b &= 0b1; // keep only last bit
+    b &= one; // keep only last bit
 
     const int32_t z = (uint32_t)b + (((uint32_t)b << 1) - 1) * z0;
 
@@ -173,6 +231,46 @@ samplerz(const double mu,
     if (ber_exp(x, ccs, eng, dis)) {
       return z + s;
     }
+  }
+}
+
+// Note, this implementation is strictly for testing correctness of samplerz
+// implementation; random bytes are pre-generated, taken from Falcon
+// specification's table 3.2
+//
+// Sampling an integer z ∈ Z from a distribution very close to D{Z, μ, σ′}
+//
+// See algorithm 15 in Falcon specification https://falcon-sign.info/falcon.pdf
+const int32_t
+samplerz(const double mu,
+         const double sigma,
+         const double sigmin,
+         uint8_t* const bytes // pre-generated random bytes
+)
+{
+  const int32_t s = static_cast<int32_t>(sycl::floor(mu));
+  const double r = mu - static_cast<double>(s);
+  const double dss = 1. / (2. * sigma * sigma);
+  const double ccs = sigmin / sigma;
+
+  size_t b_idx = 0;
+  while (true) {
+    const uint32_t z0 = base_sampler(bytes + b_idx);
+
+    uint8_t b = bytes[b_idx + 9];
+    b &= static_cast<uint8_t>(0b1); // keep only last bit
+
+    const int32_t z = (uint32_t)b + (((uint32_t)b << 1) - 1) * z0;
+
+    const double zr = ((double)z - r);
+    const double x = (zr * zr) * dss - ((double)(z0 * z0)) * INV_SIGMA2;
+
+    size_t used_bytes = 0;
+    if (ber_exp(x, ccs, bytes + b_idx + 10, &used_bytes)) {
+      return z + s;
+    }
+
+    b_idx += (10 + used_bytes);
   }
 }
 
