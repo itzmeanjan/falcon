@@ -20,8 +20,8 @@ add_small(u72* x, uint32_t d)
   return d; // carry
 }
 
-// Given a 72 -bit unsigned integer as string ( say "12345678" ), this function
-// parses it as 9 bytes
+// Given a 72 -bit unsigned integer as decimal string ( say "12345678" ), this
+// function parses it as 9 bytes
 static u72
 from_decimal(const char* str, const size_t len)
 {
@@ -45,15 +45,16 @@ from_decimal(const char* str, const size_t len)
   return x;
 }
 
-// Given a byte array of length 9 ( read 72 randomly sampled bits ), this
-// function simply copies byte array content to `u72` backing array
+// Given a byte array of length 9 ( read 72 randomly sampled bits
+// ), this function simply copies byte array content to `u72` backing array,
+// while interpreting input byte array as little endian one
 static u72
-from_decimal(const uint8_t* bytes)
+from_bytes(const uint8_t* bytes)
 {
   u72 x;
 
   for (size_t l = 0; l < x.size(); l++) {
-    x[l] = bytes[l];
+    x[8 - l] = bytes[l];
   }
 
   return x;
