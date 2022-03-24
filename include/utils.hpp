@@ -98,4 +98,33 @@ is_nonzero_coeff(
   });
 }
 
+// See
+// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L52-L58
+sycl::event
+galois_conjugate(
+  sycl::queue& q,
+  const double* const __restrict poly_src, // `poly_len` -many coefficients
+  double* const __restrict poly_dst,       // `poly_len` -many coefficients
+  const size_t poly_len,
+  const size_t wg_size,
+  std::vector<sycl::event> evts)
+{
+  assert(poly_len % wg_size == 0);
+
+  return q.submit([&](sycl::handler& h) {
+    h.depends_on(evts);
+    h.parallel_for(sycl::nd_range<1>{ poly_len, wg_size },
+                   [=](sycl::nd_item<1> it) {
+                     const size_t idx = it.get_global_linear_id();
+                     const double elm = poly_src[idx];
+
+                     if ((idx & 0b1ul) == 1) { // odd
+                       poly_dst[idx] = -1. * elm;
+                     } else { // even
+                       poly_dst[idx] = elm;
+                     }
+                   });
+  });
+}
+
 }
