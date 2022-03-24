@@ -127,4 +127,35 @@ galois_conjugate(
   });
 }
 
+// See
+// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L78-L87
+sycl::event
+lift(sycl::queue& q,
+     const double* const __restrict poly_src,
+     const size_t poly_len_src,
+     double* const __restrict poly_dst,
+     const size_t poly_len_dst,
+     const size_t wg_size,
+     std::vector<sycl::event> evts)
+{
+  assert(poly_len_src << 1 == poly_len_dst);
+  assert(poly_len_src % wg_size == 0);
+
+  sycl::event evt0 = q.submit([&](sycl::handler& h) {
+    h.depends_on(evts);
+    h.memset(poly_dst, 0, sizeof(double) * poly_len_dst);
+  });
+
+  return q.submit([&](sycl::handler& h) {
+    h.depends_on(evt0);
+    h.parallel_for(
+      sycl::nd_range<1>{ poly_len_src, wg_size }, [=](sycl::nd_item<1> it) {
+        const size_t frm_idx = it.get_global_linear_id(); // read from
+        const size_t to_idx = frm_idx << 1;               // write to
+
+        poly_dst[to_idx] = poly_src[frm_idx];
+      });
+  });
+}
+
 }
