@@ -71,7 +71,11 @@ main(int argc, char** argv)
             << std::endl;
 
   test::is_nonzero_coeff(q, 1024, 32);
-  std::cout << "[test] passed non-zero polynomial coefficient test" << std::endl;
+  std::cout << "[test] passed non-zero polynomial coefficient test"
+            << std::endl;
+
+  test::galois_conjugate(q, 1024, 32);
+  std::cout << "[test] passed galois conjugate test" << std::endl;
 
   return EXIT_SUCCESS;
 }
