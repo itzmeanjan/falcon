@@ -77,5 +77,8 @@ main(int argc, char** argv)
   test::galois_conjugate(q, 1024, 32);
   std::cout << "[test] passed galois conjugate test" << std::endl;
 
+  test::lift(q, 1024, 32);
+  std::cout << "[test] passed polynomial lift test" << std::endl;
+
   return EXIT_SUCCESS;
 }
