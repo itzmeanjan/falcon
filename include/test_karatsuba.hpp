@@ -3,56 +3,56 @@
 
 namespace test {
 
-// Tests data-parallel karatsuba polynomial multiplication implementation, **in
-// a static manner**
+// Tests data-parallel karatsuba polynomial modular multiplication
+// implementation, **in a static manner**
 //
-// @todo Improve test such that it can work for other input sizes and values.
+// @todo Improve test such that it can work for other generic input sizes and
+// values.
 void
 karatsuba(sycl::queue& q)
 {
-  using namespace karatsuba;
+  constexpr size_t dim = 8;
+  constexpr size_t itmd_dim = dim << 1;
+  constexpr size_t wg_size = 4;
 
-  const size_t i_dim = 8;
-  const size_t o_dim = i_dim << 1;
-  const size_t wg_size = 4;
+  std::array<double, dim> res = { -146, -160, -160, -144, -110, -56, 20, 120 };
 
-  std::vector<double> res = { 1,   4,   10,  20,  35,  56,  84, 120,
-                              147, 164, 170, 164, 145, 112, 64, 0 };
+  constexpr size_t size = sizeof(double) * dim;
+  constexpr size_t itmd_size = sizeof(double) * itmd_dim;
 
-  const size_t i_size = sizeof(double) * i_dim;
-  const size_t o_size = sizeof(double) * o_dim;
-
-  double* src_a = static_cast<double*>(sycl::malloc_shared(i_size, q));
-  double* src_b = static_cast<double*>(sycl::malloc_shared(i_size, q));
-  double* itmd = static_cast<double*>(sycl::malloc_shared(i_size, q));
-  double* dst = static_cast<double*>(sycl::malloc_shared(o_size, q));
+  double* poly_a = static_cast<double*>(sycl::malloc_shared(size, q));
+  double* poly_b = static_cast<double*>(sycl::malloc_shared(size, q));
+  double* itmd_a = static_cast<double*>(sycl::malloc_shared(size, q));
+  double* itmd_b = static_cast<double*>(sycl::malloc_shared(itmd_size, q));
+  double* poly_dst = static_cast<double*>(sycl::malloc_shared(size, q));
 
   // a = [1, 2, 3, 4, 5, 6, 7, 8]
   // b = a
   // n = len(a)
   //
   // now invoke
-  // https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L14
+  // https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L42-L49
   //
-  // res = [1, 4, 10, 20, 35, 56, 84, 120, 147, 164, 170, 164, 145, 112, 64, 0]
-  for (size_t i = 0; i < i_dim; i++) {
-    src_a[i] = i + 1;
-    src_b[i] = i + 1;
+  // res = [-146, -160, -160, -144, -110, -56, 20, 120]
+  for (size_t i = 0; i < dim; i++) {
+    poly_a[i] = i + 1;
+    poly_b[i] = i + 1;
   }
 
-  std::vector<sycl::event> evts = multiplication(
-    q, src_a, i_dim, src_b, i_dim, itmd, i_dim, dst, o_dim, wg_size, {});
+  std::vector<sycl::event> evts = karatsuba::modular_multiplication(
+    q, poly_a, poly_b, itmd_a, itmd_b, poly_dst, dim, wg_size, {});
 
   q.ext_oneapi_submit_barrier(evts).wait();
 
-  for (size_t i = 0; i < o_dim; i++) {
-    assert(res[i] == dst[i]);
+  for (size_t i = 0; i < dim; i++) {
+    assert(res[i] == poly_dst[i]);
   }
 
-  sycl::free(src_a, q);
-  sycl::free(src_b, q);
-  sycl::free(itmd, q);
-  sycl::free(dst, q);
+  sycl::free(poly_a, q);
+  sycl::free(poly_b, q);
+  sycl::free(itmd_a, q);
+  sycl::free(itmd_b, q);
+  sycl::free(poly_dst, q);
 }
 
 }

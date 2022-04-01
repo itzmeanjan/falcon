@@ -360,4 +360,42 @@ div(sycl::queue& q,
   return evts2;
 }
 
+// Computes adjoint of a polynomial provided in coefficient representation
+//
+// See
+// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/fft.py#L124-L126
+std::vector<sycl::event>
+adj(sycl::queue& q,
+    const double* const __restrict s_coeff, // input is here
+    fft::cmplx* const __restrict s_fft,
+    const size_t s_len,
+    fft::cmplx* const __restrict d_coeff, // output is here
+    fft::cmplx* const __restrict d_fft,
+    const size_t d_len,
+    const size_t wg_size,
+    std::vector<sycl::event> evts)
+{
+  using namespace fft;
+  using events = std::vector<sycl::event>;
+
+  assert(s_len == d_len);
+  assert(s_len % wg_size == 0);
+
+  events evts0 = cooley_tukey_fft(q, s_coeff, s_fft, s_len, wg_size, evts);
+
+  sycl::event evt0 = q.submit([&](sycl::handler& h) {
+    h.depends_on(evts0);
+    h.parallel_for(sycl::nd_range<1>{ s_len, wg_size },
+                   [=](sycl::nd_item<1> it) {
+                     const size_t idx = it.get_global_linear_id();
+
+                     d_fft[idx] = std::conj(s_fft[idx]);
+                   });
+  });
+
+  events evts1 = cooley_tukey_ifft(q, d_fft, d_coeff, d_len, wg_size, { evt0 });
+
+  return evts1;
+}
+
 }
