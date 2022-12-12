@@ -192,6 +192,18 @@ struct ff_t
 
   // Inequality check between two field elements ∈ Z_q
   constexpr bool operator!=(const ff_t& rhs) const { return !(*this == rhs); }
+
+  // Greater than operator applied to elements ∈ Z_q
+  constexpr bool operator>(const ff_t& rhs) const { return this->v > rhs.v; }
+
+  // Greater than equal operator applied to elements ∈ Z_q
+  constexpr bool operator>=(const ff_t& rhs) const { return this->v >= rhs.v; }
+
+  // Lesser than operator applied to elements ∈ Z_q
+  constexpr bool operator<(const ff_t& rhs) const { return this->v < rhs.v; }
+
+  // Lesser than equal operator applied to elements ∈ Z_q
+  constexpr bool operator<=(const ff_t& rhs) const { return this->v <= rhs.v; }
 };
 
 // Computes canonical form of multiplicative inverse of prime field element,
