@@ -1,5 +1,7 @@
 #pragma once
-#include <CL/sycl.hpp>
+#include <bit>
+#include <cstddef>
+#include <cstdint>
 
 namespace ff {
 
@@ -170,7 +172,7 @@ exp(const uint32_t a, const size_t b)
   uint32_t r = b & 0b1 ? a : 1;
 
   // i in 1..64 - power.leading_zeros()
-  for (uint8_t i = 1; i < 64 - sycl::clz(b); i++) {
+  for (uint8_t i = 1; i < 64 - std::countl_one(b); i++) {
     base = mul(base, base);
     if ((b >> i) & 0b1) {
       r = mul(r, base);
