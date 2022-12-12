@@ -204,6 +204,18 @@ struct ff_t
 
   // Lesser than equal operator applied to elements ∈ Z_q
   constexpr bool operator<=(const ff_t& rhs) const { return this->v <= rhs.v; }
+
+  // Shifts operand ∈ Z_q, leftwards by l bit positions
+  constexpr ff_t operator<<(const size_t l) const
+  {
+    return ff_t{ static_cast<uint16_t>(this->v << l) };
+  }
+
+  // Shifts operand ∈ Z_q, rightwards by l bit positions
+  constexpr ff_t operator>>(const size_t l) const
+  {
+    return ff_t{ static_cast<uint16_t>(this->v >> l) };
+  }
 };
 
 // Computes canonical form of multiplicative inverse of prime field element,
