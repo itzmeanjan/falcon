@@ -90,6 +90,16 @@ struct ff_t
 
   // Construct field element, holding canonical value 1
   static inline ff_t one() { return ff_t{ 1 }; }
+
+  // Addition over prime field Z_q
+  constexpr ff_t operator+(const ff_t& rhs) const
+  {
+    const uint16_t t0 = this->v + rhs.v;
+    const bool flg = t0 >= Q;
+    const uint16_t t1 = t0 - flg * Q;
+
+    return ff_t{ t1 };
+  }
 };
 
 // Computes canonical form of multiplicative inverse of prime field element,
