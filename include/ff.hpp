@@ -10,6 +10,16 @@ namespace ff {
 // Falcon Prime Field Modulus
 constexpr uint16_t Q = 3 * (1 << 12) + 1;
 
+// Precomputed Barrett Reduction Constant
+//
+// Note,
+//
+// k = ceil(log2(Q)) = 14
+// r = floor((1 << 2k) / Q) = 21843
+//
+// See https://www.nayuki.io/page/barrett-reduction-algorithm for more.
+constexpr uint16_t R = 21843;
+
 typedef struct xgcd_t
 {
   const int32_t a;
@@ -113,6 +123,31 @@ struct ff_t
   {
     const uint16_t tmp = Q - this->v;
     return ff_t{ tmp };
+  }
+
+  // Multiplication over prime field Z_q
+  //
+  // Note, after multiplying two 14 -bit numbers resulting 28 -bit number is
+  // reduced to Z_q using Barrett reduction algorithm, which avoid division by
+  // any value which is not power of 2 | q = 12289.
+  //
+  // See https://www.nayuki.io/page/barrett-reduction-algorithm for Barrett
+  // reduction algorithm
+  inline constexpr ff_t operator*(const ff_t& rhs) const
+  {
+    const uint32_t t0 = static_cast<uint32_t>(this->v);
+    const uint32_t t1 = static_cast<uint32_t>(rhs.v);
+    const uint32_t t2 = t0 * t1;
+
+    const uint64_t t3 = static_cast<uint64_t>(t2) * static_cast<uint64_t>(R);
+    const uint32_t t4 = static_cast<uint32_t>(t3 >> 28);
+    const uint32_t t5 = t4 * static_cast<uint32_t>(Q);
+    const uint16_t t6 = static_cast<uint16_t>(t2 - t5);
+
+    const bool flg = t6 >= Q;
+    const uint16_t t7 = t6 - flg * Q;
+
+    return ff_t{ t7 };
   }
 };
 
