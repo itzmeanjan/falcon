@@ -100,6 +100,20 @@ struct ff_t
 
     return ff_t{ t1 };
   }
+
+  // Subtraction over prime field Z_q
+  constexpr ff_t operator-(const ff_t& rhs) const
+  {
+    const ff_t t0 = -rhs;
+    return *this + t0;
+  }
+
+  // Negation over prime field Z_q
+  constexpr ff_t operator-() const
+  {
+    const uint16_t tmp = Q - this->v;
+    return ff_t{ tmp };
+  }
 };
 
 // Computes canonical form of multiplicative inverse of prime field element,
