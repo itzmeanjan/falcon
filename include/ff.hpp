@@ -70,10 +70,10 @@ struct ff_t
   inline constexpr ff_t(const uint16_t _v = 0) { v = _v % Q; }
 
   // Construct field element, holding canonical value 0
-  static inline ff_t zero() { return ff_t{ 0 }; }
+  inline constexpr ff_t zero() { return ff_t{ 0 }; }
 
   // Construct field element, holding canonical value 1
-  static inline ff_t one() { return ff_t{ 1 }; }
+  inline constexpr ff_t one() { return ff_t{ 1 }; }
 
   // Addition over prime field Z_q
   constexpr ff_t operator+(const ff_t& rhs) const
@@ -157,6 +157,31 @@ struct ff_t
   constexpr ff_t operator/(const ff_t& rhs) const
   {
     return (*this) * rhs.inv();
+  }
+
+  // Raises field element to N -th power, using exponentiation by repeated
+  // squaring rule
+  //
+  // Taken from
+  // https://github.com/itzmeanjan/kyber/blob/3cd41a5/include/ff.hpp#L224-L246
+  constexpr ff_t operator^(const size_t n) const
+  {
+    ff_t base = *this;
+
+    const ff_t br[]{ ff_t{ 1 }, base };
+    ff_t res = br[n & 0b1ul];
+
+    const size_t zeros = std::countl_zero(n);
+    const size_t till = 64ul - zeros;
+
+    for (size_t i = 1; i < till; i++) {
+      base = base * base;
+
+      const ff_t br[]{ ff_t{ 1 }, base };
+      res = res * br[(n >> i) & 0b1ul];
+    }
+
+    return res;
   }
 };
 
