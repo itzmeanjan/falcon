@@ -3,6 +3,7 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <ostream>
 #include <random>
 
 // Prime field arithmetic over Z_q, for Falcon PQC s.t. q = 3 * (2 ^ 12) + 1
@@ -227,130 +228,15 @@ struct ff_t
 
     return ff_t{ dis(gen) };
   }
+
+  // Writes element of Z_q to output stream
+  inline friend std::ostream& operator<<(std::ostream& os, const ff_t& elm);
 };
 
-// Computes canonical form of multiplicative inverse of prime field element,
-// where a ∈ F_Q; Q = field modulus; ensure 0 < a < Q
-//
-// Say return value of this function is b, then
-//
-// assert (a * b) % Q == 1
-//
-// See `Field` class definition in
-// https://aszepieniec.github.io/stark-anatomy/basic-tools
-const uint32_t
-inv(const uint32_t a // operand to be inverted; must be in `0 < a < Q`
-)
+std::ostream&
+operator<<(std::ostream& os, const ff_t& elm)
 {
-  // can't compute multiplicative inverse of 0 in prime field
-  if (a == 0) {
-    return 0;
-  }
-
-  xgcd_t v = xgcd(a, ff::Q);
-
-  if (v.a < 0) {
-    return ff::Q + v.a;
-  }
-
-  return v.a % ff::Q;
-}
-
-// Computes canonical form of prime field multiplication of a, b, where both of
-// them belongs to [0, Q)
-//
-// See `Field` class definition in
-// https://aszepieniec.github.io/stark-anatomy/basic-tools
-static inline const uint32_t
-mul(const uint32_t a, const uint32_t b)
-{
-  return (a * b) % ff::Q;
-}
-
-// Computes canonical form of prime field addition of a, b
-//
-// See `Field` class definition in
-// https://aszepieniec.github.io/stark-anatomy/basic-tools
-static inline const uint32_t
-add(const uint32_t a, const uint32_t b)
-{
-  return (a + b) % ff::Q;
-}
-
-// Computes canonical form of prime field subtraction of `b` from `a`
-//
-// See `Field` class definition in
-// https://aszepieniec.github.io/stark-anatomy/basic-tools
-static inline const uint32_t
-sub(const uint32_t a, const uint32_t b)
-{
-  return (ff::Q + a - b) % ff::Q;
-}
-
-// Computes canonical form of prime field negation of `a`
-//
-// See `Field` class definition in
-// https://aszepieniec.github.io/stark-anatomy/basic-tools
-static inline const uint32_t
-neg(const uint32_t a)
-{
-  return (ff::Q - a) % ff::Q;
-}
-
-// Computes canonical form of prime field `a` divided by `b`, when b > 0
-//
-// See `Field` class definition in
-// https://aszepieniec.github.io/stark-anatomy/basic-tools
-static inline const uint32_t
-div(const uint32_t a, const uint32_t b)
-{
-  // can't divide by 0 in prime field, because can't compute
-  // multiplicative inverse of 0
-  if (b == 0) {
-    return 0;
-  }
-
-  return mul(a, inv(b));
-}
-
-// Raises field element `a` to `b` -th power; using exponentiation by squaring
-// rule; see
-// https://github.com/itzmeanjan/ff-gpu/blob/89c9719e5897e57e92a3989d7d8c4e120b3aa311/ff_p.cpp#L78-L101
-const uint32_t
-exp(const uint32_t a, const size_t b)
-{
-  if (b == 0) {
-    return 1;
-  }
-  if (b == 1) {
-    return a;
-  }
-  if (a == 0) {
-    return 0;
-  }
-
-  uint32_t base = a;
-  uint32_t r = b & 0b1 ? a : 1;
-
-  // i in 1..64 - power.leading_zeros()
-  for (uint8_t i = 1; i < 64 - std::countl_one(b); i++) {
-    base = mul(base, base);
-    if ((b >> i) & 0b1) {
-      r = mul(r, base);
-    }
-  }
-
-  return r % ff::Q;
-}
-
-// Computes root of unity of order `2 ^ n`, such that n > 0 && n <= TWO_ADICITY
-//
-// See
-// https://github.com/novifinancial/winterfell/blob/86d05a2c9e6e43297db30c9822a68b9dfba439e3/math/src/field/traits.rs#L220-L233
-static inline const uint32_t
-get_nth_root_of_unity(const uint32_t n)
-{
-  return exp(TWO_ADIC_ROOT_OF_UNITY, 1ul << (TWO_ADICITY - n));
+  return os << "Z_q(" << elm.v << ", " << Q << ")";
 }
 
 }
