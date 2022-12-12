@@ -20,51 +20,25 @@ constexpr uint16_t Q = 3 * (1 << 12) + 1;
 // See https://www.nayuki.io/page/barrett-reduction-algorithm for more.
 constexpr uint16_t R = 21843;
 
-typedef struct xgcd_t
-{
-  const int32_t a;
-  const int32_t b;
-  const int32_t g;
-} xgcd_t;
-
-// Primitive Element of prime field
-// $ python3
-// >>> import galois as gl
-// >>> gf = gl.GF(12289)
-// >>> gf.primitive_element
-// GF(11, order=12289)
-constexpr uint32_t GENERATOR = 11;
-
-// $ python3
-// >>> assert is_odd((Q - 1) >> 12)
-//
-// See
-// https://github.com/novifinancial/winterfell/blob/86d05a2c9e6e43297db30c9822a68b9dfba439e3/math/src/field/f64/mod.rs#L196-L198
-constexpr uint32_t TWO_ADICITY = 12;
-
-// $ python3
-// >>> import galois as gl
-// >>> gf = gl.GF(12289)
-// >>> k = (gf.order - 1) >> 12
-// >>> gf.primitive_element ** k
-// GF(1331, order=12289)
-constexpr uint32_t TWO_ADIC_ROOT_OF_UNITY = 1331;
-
 // Extended GCD algorithm for computing multiplicative inverse over
 // prime field Z_q
 //
 // Taken from
 // https://github.com/itzmeanjan/kyber/blob/3cd41a5/include/ff.hpp#L49-L82
-static constexpr std::array<int32_t, 3>
-xgcd(const uint32_t x, const uint32_t y)
+// Extended GCD algorithm for computing inverse of prime ( = Q ) field element
+//
+// Taken from
+// https://github.com/itzmeanjan/falcon/blob/45b0593215c3f2ec550860128299b123885b3a42/include/ff.hpp#L40-L67
+static inline constexpr std::array<int16_t, 3>
+xgcd(const uint16_t x, const uint16_t y)
 {
-  int32_t old_r = static_cast<int32_t>(x), r = static_cast<int32_t>(y);
-  int32_t old_s = 1, s = 0;
-  int32_t old_t = 0, t = 1;
+  int16_t old_r = static_cast<int16_t>(x), r = static_cast<int16_t>(y);
+  int16_t old_s = 1, s = 0;
+  int16_t old_t = 0, t = 1;
 
   while (r != 0) {
-    int32_t quotient = old_r / r;
-    int32_t tmp = 0;
+    int16_t quotient = old_r / r;
+    int16_t tmp = 0;
 
     tmp = old_r;
     old_r = r;
@@ -148,6 +122,35 @@ struct ff_t
     const uint16_t t7 = t6 - flg * Q;
 
     return ff_t{ t7 };
+  }
+
+  // Multiplicative inverse over prime field Z_q
+  //
+  // Say input is a & return value of this function is b, then
+  //
+  // assert (a * b) % q == 1
+  //
+  // When input a = 0, multiplicative inverse can't be computed, hence return
+  // value is 0. Look out for this sitation, because this function won't raise
+  // exception.
+  //
+  // Taken from
+  // https://github.com/itzmeanjan/kyber/blob/3cd41a5/include/ff.hpp#L190-L216
+  constexpr ff_t inv() const
+  {
+    const bool flg0 = this->v == 0;
+    const uint16_t t0 = this->v + flg0 * 1;
+
+    const auto res = xgcd(t0, Q);
+
+    const bool flg1 = res[0] < 0;
+    const uint16_t t1 = static_cast<uint16_t>(flg1 * Q + res[0]);
+
+    const bool flg2 = t1 >= Q;
+    const uint16_t t2 = t1 - flg2 * Q;
+    const uint16_t t3 = t2 - flg0 * 1;
+
+    return ff_t{ t3 };
   }
 };
 
