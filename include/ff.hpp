@@ -152,6 +152,12 @@ struct ff_t
 
     return ff_t{ t3 };
   }
+
+  // Division over prime field Z_q
+  constexpr ff_t operator/(const ff_t& rhs) const
+  {
+    return (*this) * rhs.inv();
+  }
 };
 
 // Computes canonical form of multiplicative inverse of prime field element,
