@@ -183,6 +183,15 @@ struct ff_t
 
     return res;
   }
+
+  // Equality check between two field elements ∈ Z_q
+  constexpr bool operator==(const ff_t& rhs) const
+  {
+    return !static_cast<bool>(this->v ^ rhs.v);
+  }
+
+  // Inequality check between two field elements ∈ Z_q
+  constexpr bool operator!=(const ff_t& rhs) const { return !(*this == rhs); }
 };
 
 // Computes canonical form of multiplicative inverse of prime field element,
