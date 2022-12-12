@@ -1,9 +1,11 @@
 #include "test_ff.hpp"
-#include <iomanip>
 #include <iostream>
 
 int
 main()
 {
+  test::ff_math();
+  std::cout << "[test] Falcon prime field operations\n";
+
   return EXIT_SUCCESS;
 }
