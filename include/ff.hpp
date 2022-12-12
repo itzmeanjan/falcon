@@ -1,9 +1,14 @@
 #pragma once
+#include <array>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
 
+// Prime field arithmetic over Z_q, for Falcon PQC s.t. q = 3 * (2 ^ 12) + 1
 namespace ff {
+
+// Falcon Prime Field Modulus
+constexpr uint16_t Q = 3 * (1 << 12) + 1;
 
 typedef struct xgcd_t
 {
@@ -11,10 +16,6 @@ typedef struct xgcd_t
   const int32_t b;
   const int32_t g;
 } xgcd_t;
-
-// Prime Field Modulus for Falcon; see
-// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/common.py#L4-L5
-constexpr uint32_t Q = 12 * 1024 + 1;
 
 // Primitive Element of prime field
 // $ python3
@@ -39,9 +40,12 @@ constexpr uint32_t TWO_ADICITY = 12;
 // GF(1331, order=12289)
 constexpr uint32_t TWO_ADIC_ROOT_OF_UNITY = 1331;
 
-// Extended GCD algorithm for computing inverse of prime ( = Q ) field element;
-// see https://aszepieniec.github.io/stark-anatomy/basic-tools
-const xgcd_t
+// Extended GCD algorithm for computing multiplicative inverse over
+// prime field Z_q
+//
+// Taken from
+// https://github.com/itzmeanjan/kyber/blob/3cd41a5/include/ff.hpp#L49-L82
+static constexpr std::array<int32_t, 3>
 xgcd(const uint32_t x, const uint32_t y)
 {
   int32_t old_r = static_cast<int32_t>(x), r = static_cast<int32_t>(y);
@@ -65,8 +69,28 @@ xgcd(const uint32_t x, const uint32_t y)
     t = tmp - quotient * t;
   }
 
-  return xgcd_t{ old_s, old_t, old_r }; // a, b, g of `ax + by = g`
+  return {
+    old_s, // a
+    old_t, // b
+    old_r  // g
+  };       // s.t. `ax + by = g`
 }
+
+// Falcon Prime Field element e ∈ [0, Q), with arithmetic operations defined
+// & implemented over Z_q.
+struct ff_t
+{
+  uint16_t v = 0u;
+
+  // Construct field element, holding canonical value _v % Q
+  inline constexpr ff_t(const uint16_t _v = 0) { v = _v % Q; }
+
+  // Construct field element, holding canonical value 0
+  static inline ff_t zero() { return ff_t{ 0 }; }
+
+  // Construct field element, holding canonical value 1
+  static inline ff_t one() { return ff_t{ 1 }; }
+};
 
 // Computes canonical form of multiplicative inverse of prime field element,
 // where a ∈ F_Q; Q = field modulus; ensure 0 < a < Q
