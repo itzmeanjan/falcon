@@ -3,6 +3,7 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <random>
 
 // Prime field arithmetic over Z_q, for Falcon PQC s.t. q = 3 * (2 ^ 12) + 1
 namespace ff {
@@ -215,6 +216,16 @@ struct ff_t
   constexpr ff_t operator>>(const size_t l) const
   {
     return ff_t{ static_cast<uint16_t>(this->v >> l) };
+  }
+
+  // Generate a random field element ∈ Z_q
+  static ff_t random()
+  {
+    std::random_device rd;
+    std::mt19937_64 gen(rd());
+    std::uniform_int_distribution<uint16_t> dis{ 0, Q - 1 };
+
+    return ff_t{ dis(gen) };
   }
 };
 
