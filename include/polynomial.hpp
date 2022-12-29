@@ -1,5 +1,4 @@
 #pragma once
-#include "ff.hpp"
 #include "ntt.hpp"
 
 // Polynomial arithmetic over Falcon Prime Field Z_q | q = 3 * (2 ^ 12) + 1
