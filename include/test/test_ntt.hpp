@@ -1,41 +1,41 @@
 #pragma once
 #include "ntt.hpp"
+#include <cassert>
+#include <cstring>
 
-namespace test {
+// Test functional correctness of Falcon PQC suite implementation
+namespace test_falcon {
 
+// Ensure functional correctness of (i)NTT implementation, as used in
+// Falcon{512, 1024}, by executing following flow
+//
+// f |> NTT |> iNTT |> f' s.t. f == f'
+template<const size_t lgn>
 void
-ntt(sycl::queue& q, const size_t dim, const size_t wg_size)
+test_ntt()
 {
-  using namespace ntt;
+  const size_t n = 1ul << lgn;
 
-  const size_t size = sizeof(uint32_t) * dim;
+  auto* polya = static_cast<ff::ff_t*>(std::malloc(n * sizeof(ff::ff_t)));
+  auto* polyb = static_cast<ff::ff_t*>(std::malloc(n * sizeof(ff::ff_t)));
 
-  uint32_t* src = static_cast<uint32_t*>(sycl::malloc_shared(size, q));
-  uint32_t* fft_dst = static_cast<uint32_t*>(sycl::malloc_shared(size, q));
-  uint32_t* ifft_dst = static_cast<uint32_t*>(sycl::malloc_shared(size, q));
+  for (size_t i = 0; i < n; i++) {
+    polya[i] = ff::ff_t::random();
+  }
+  std::memcpy(polyb, polya, n * sizeof(ff::ff_t));
 
-  random_fill(src, dim);
-  sycl::event evt0 = q.memset(fft_dst, 0, size);
-  sycl::event evt1 = q.memset(ifft_dst, 0, size);
+  ntt::ntt<lgn>(polyb);
+  ntt::intt<lgn>(polyb);
 
-  std::vector<sycl::event> evts0 =
-    cooley_tukey_ntt(q, src, fft_dst, dim, wg_size, { evt0 });
-  std::vector<sycl::event> evts1 =
-    cooley_tukey_intt(q,
-                      fft_dst,
-                      ifft_dst,
-                      dim,
-                      wg_size,
-                      { evt0, evt1, evts0.at(evts0.size() - 1) });
-  evts1.at(evts1.size() - 1).wait();
-
-  for (size_t i = 0; i < dim; i++) {
-    assert(src[i] == ifft_dst[i]);
+  bool flg = false;
+  for (size_t i = 0; i < n; i++) {
+    flg |= static_cast<bool>(polya[i].v ^ polyb[i].v);
   }
 
-  sycl::free(src, q);
-  sycl::free(fft_dst, q);
-  sycl::free(ifft_dst, q);
+  std::free(polya);
+  std::free(polyb);
+
+  assert(!flg);
 }
 
 }
