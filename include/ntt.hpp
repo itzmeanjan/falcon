@@ -21,7 +21,7 @@ constexpr auto INV_N = ff::ff_t{ N }.inv();
 // order, returning bit reversed `mbw` -bit wide number
 //
 // See
-// https://github.com/itzmeanjan/dilithium/blob/776e4c35830cd330f59062a30b7c93ae6731e3a7/include/ntt.hpp#L56-L75
+// https://github.com/itzmeanjan/dilithium/blob/776e4c3/include/ntt.hpp#L56-L75
 // for source of inspiration
 template<const size_t mbw>
 inline static constexpr size_t
@@ -37,15 +37,14 @@ bit_rev(const size_t v)
   return v_rev;
 }
 
-// Given a polynomial f with 256 coefficients over Z_q | q = 2^23 - 2^13 + 1,
-// this routine computes number theoretic transform using Cooley-Tukey
-// algorithm, producing polynomial f' s.t. its coefficients are placed in
-// bit-reversed order
+// Given a polynomial f with 512 coefficients s.t. each coefficient ∈ Z_q, this
+// routine computes number theoretic transform using Cooley-Tukey algorithm,
+// producing 512 evaluations f' s.t. they are placed in bit-reversed order.
 //
 // Note, this routine mutates input i.e. it's an in-place NTT implementation.
 //
 // Implementation inspired from
-// https://github.com/itzmeanjan/dilithium/blob/776e4c35830cd330f59062a30b7c93ae6731e3a7/include/ntt.hpp#L77-L111
+// https://github.com/itzmeanjan/dilithium/blob/776e4c3/include/ntt.hpp#L77-L111
 inline void
 ntt(ff::ff_t* const __restrict poly)
 {
@@ -56,7 +55,7 @@ ntt(ff::ff_t* const __restrict poly)
 
     for (size_t start = 0; start < N; start += lenx2) {
       const size_t k_now = k_beg + (start >> (l + 1));
-      const ff::ff_t ζ_exp = ζ ^ bit_rev<LOG2N>(k_now);
+      const auto ζ_exp = ζ ^ bit_rev<LOG2N>(k_now);
 
       for (size_t i = start; i < start + len; i++) {
         const auto tmp = ζ_exp * poly[i + len];
@@ -65,6 +64,42 @@ ntt(ff::ff_t* const __restrict poly)
         poly[i] = poly[i] + tmp;
       }
     }
+  }
+}
+
+// Given 512 evaluations of polynomial f s.t. each evaluation ∈ Z_q and they are
+// placed in bit-reversed order, this routine computes inverse number theoretic
+// transform using Gentleman-Sande algorithm, producing polynomial f' s.t. its
+// 512 coefficients are placed in standard order.
+//
+// Note, this routine mutates input i.e. it's an in-place iNTT implementation.
+//
+// Implementation inspired from
+// https://github.com/itzmeanjan/dilithium/blob/776e4c3/include/ntt.hpp#L113-L150
+inline void
+intt(ff::ff_t* const __restrict poly)
+{
+  for (size_t l = 0; l < LOG2N; l++) {
+    const size_t len = 1ul << l;
+    const size_t lenx2 = len << 1;
+    const size_t k_beg = (N >> l) - 1;
+
+    for (size_t start = 0; start < N; start += lenx2) {
+      const size_t k_now = k_beg - (start >> (l + 1));
+      const auto neg_ζ_exp = -(ζ ^ bit_rev<LOG2N>(k_now));
+
+      for (size_t i = start; i < start + len; i++) {
+        const auto tmp = poly[i];
+
+        poly[i] = poly[i] + poly[i + len];
+        poly[i + len] = tmp - poly[i + len];
+        poly[i + len] = poly[i + len] * neg_ζ_exp;
+      }
+    }
+  }
+
+  for (size_t i = 0; i < N; i++) {
+    poly[i] = poly[i] * INV_N;
   }
 }
 
