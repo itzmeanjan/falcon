@@ -31,8 +31,8 @@ test_ntt()
   std::uniform_int_distribution<uint16_t> dis{ 1, ff::Q - 1 };
 
   for (size_t i = 0; i < n; i++) {
-    poly_a[i].v = dis(gen);
-    poly_b[i].v = dis(gen);
+    poly_a[i] = ff::ff_t{ dis(gen) };
+    poly_b[i] = ff::ff_t{ dis(gen) };
   }
 
   std::memcpy(ntt_a, poly_a, n * sizeof(ff::ff_t));
