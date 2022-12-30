@@ -5,7 +5,7 @@ IFLAGS = -I ./include
 
 all: testing
 
-test/a.out: test/main.cpp include/*.hpp
+test/a.out: test/main.cpp include/*.hpp include/test/*.hpp
 	$(CXX) $(CXXFLAGS) $(OPTFLAGS) $(IFLAGS) $(DEP_IFLAGS) $< -o $@
 
 testing: test/a.out
