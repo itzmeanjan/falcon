@@ -1,48 +1,70 @@
 #pragma once
-#include "common.hpp"
-#include "fft.hpp"
+#include "polynomial.hpp"
+#include <cassert>
+#include <cstring>
 
-namespace test {
+// Test functional correctness of Falcon PQC suite implementation
+namespace test_falcon {
 
-double
-fft(sycl::queue& q, const size_t dim, const size_t wg_size)
+// Ensure functional correctness of (i)FFT implementation, using polynomial
+// multiplication and division in FFT form, over C
+//
+// Test is adapted from
+// https://github.com/tprest/falcon.py/blob/88d01ed/test.py#L46-L59
+template<const size_t lgn>
+void
+test_fft()
 {
-  using namespace fft;
+  const size_t n = 1ul << lgn;
 
-  const size_t i_size = sizeof(double) * dim;
-  const size_t o_size = sizeof(cmplx) * dim;
+  auto* poly_a = static_cast<fft::cmplx*>(std::malloc(n * sizeof(fft::cmplx)));
+  auto* poly_b = static_cast<fft::cmplx*>(std::malloc(n * sizeof(fft::cmplx)));
+  auto* poly_d = static_cast<fft::cmplx*>(std::malloc(n * sizeof(fft::cmplx)));
 
-  double* src = static_cast<double*>(sycl::malloc_shared(i_size, q));
-  cmplx* fft_dst = static_cast<cmplx*>(sycl::malloc_shared(o_size, q));
-  cmplx* ifft_dst = static_cast<cmplx*>(sycl::malloc_shared(o_size, q));
+  auto* fft_a = static_cast<fft::cmplx*>(std::malloc(n * sizeof(fft::cmplx)));
+  auto* fft_b = static_cast<fft::cmplx*>(std::malloc(n * sizeof(fft::cmplx)));
+  auto* fft_c = static_cast<fft::cmplx*>(std::malloc(n * sizeof(fft::cmplx)));
+  auto* fft_d = static_cast<fft::cmplx*>(std::malloc(n * sizeof(fft::cmplx)));
 
-  random_fill(src, dim);
-  sycl::event evt0 = q.memset(fft_dst, 0, o_size);
-  sycl::event evt1 = q.memset(ifft_dst, 0, o_size);
+  std::random_device rd;
+  std::mt19937_64 gen(rd());
+  std::uniform_int_distribution<int> dis{ -3, 4 };
 
-  std::vector<sycl::event> evts0 =
-    cooley_tukey_fft(q, src, fft_dst, dim, wg_size, { evt0 });
-  std::vector<sycl::event> evts1 =
-    cooley_tukey_ifft(q,
-                      fft_dst,
-                      ifft_dst,
-                      dim,
-                      wg_size,
-                      { evt0, evt1, evts0.at(evts0.size() - 1) });
-  evts1.at(evts1.size() - 1).wait();
-
-  double max_diff = 0.;
-
-  for (size_t i = 0; i < dim; i++) {
-    const double diff = sycl::abs(src[i] - std::round(ifft_dst[i].real()));
-    max_diff = std::max(diff, max_diff);
+  for (size_t i = 0; i < n; i++) {
+    poly_a[i] = fft::cmplx{ static_cast<double>(dis(gen)) };
+    poly_b[i] = fft::cmplx{ static_cast<double>(dis(gen)) };
   }
 
-  sycl::free(src, q);
-  sycl::free(fft_dst, q);
-  sycl::free(ifft_dst, q);
+  std::memcpy(fft_a, poly_a, n * sizeof(fft::cmplx));
+  std::memcpy(fft_b, poly_b, n * sizeof(fft::cmplx));
 
-  return max_diff;
+  fft::fft<lgn>(fft_a);
+  fft::fft<lgn>(fft_b);
+
+  polynomial::mul<lgn>(fft_a, fft_b, fft_c); // c = a * b
+  polynomial::div<lgn>(fft_c, fft_b, fft_d); // d = c / b
+
+  std::memcpy(poly_d, fft_d, n * sizeof(fft::cmplx));
+  fft::ifft<lgn>(poly_d);
+
+  for (size_t i = 0; i < n; i++) {
+    poly_d[i] = fft::cmplx{ std::round(poly_d[i].real()) };
+  }
+
+  bool flg = false;
+  for (size_t i = 0; i < n; i++) {
+    flg |= (poly_d[i] != poly_a[i]);
+  }
+
+  std::free(poly_a);
+  std::free(poly_b);
+  std::free(poly_d);
+  std::free(fft_a);
+  std::free(fft_b);
+  std::free(fft_c);
+  std::free(fft_d);
+
+  assert(!flg);
 }
 
 }
