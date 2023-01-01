@@ -3,7 +3,8 @@
 #include "fft.hpp"
 #include "ntt.hpp"
 
-// Polynomial arithmetic over Falcon Prime Field Z_q | q = 3 * (2 ^ 12) + 1
+// Polynomial arithmetic over Falcon Prime Field Z_q | q = 3 * (2 ^ 12) + 1 and
+// complex number field C
 namespace polynomial {
 
 // Multiply two degree-{(1 << lg2n) - 1} polynomials in their FFT form, by
@@ -48,6 +49,21 @@ inline void
 div(const ff::ff_t* const __restrict polya,
     const ff::ff_t* const __restrict polyb,
     ff::ff_t* const __restrict polyc)
+{
+  constexpr size_t n = 1ul << lg2n;
+
+  for (size_t i = 0; i < n; i++) {
+    polyc[i] = polya[i] / polyb[i];
+  }
+}
+
+// Divide one degree-{(1 << lg2n) - 1} polynomial by another one, in their FFT
+// form, by performing element-wise division over C
+template<const size_t lg2n>
+inline void
+div(const fft::cmplx* const __restrict polya,
+    const fft::cmplx* const __restrict polyb,
+    fft::cmplx* const __restrict polyc)
 {
   constexpr size_t n = 1ul << lg2n;
 
