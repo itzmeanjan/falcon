@@ -1,5 +1,4 @@
 #pragma once
-#include "ff.hpp"
 #include "fft.hpp"
 #include "ntt.hpp"
 
