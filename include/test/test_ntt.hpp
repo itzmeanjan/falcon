@@ -1,41 +1,66 @@
 #pragma once
-#include "ntt.hpp"
+#include "polynomial.hpp"
+#include <cassert>
+#include <cstring>
 
-namespace test {
+// Test functional correctness of Falcon PQC suite implementation
+namespace test_falcon {
 
+// Ensure functional correctness of (i)NTT implementation, using polynomial
+// multiplication and division over Z_q
+//
+// Test is adapted from
+// https://github.com/tprest/falcon.py/blob/88d01ed/test.py#L62-L77
+template<const size_t lgn>
 void
-ntt(sycl::queue& q, const size_t dim, const size_t wg_size)
+test_ntt()
 {
-  using namespace ntt;
+  const size_t n = 1ul << lgn;
 
-  const size_t size = sizeof(uint32_t) * dim;
+  auto* poly_a = static_cast<ff::ff_t*>(std::malloc(n * sizeof(ff::ff_t)));
+  auto* poly_b = static_cast<ff::ff_t*>(std::malloc(n * sizeof(ff::ff_t)));
+  auto* poly_d = static_cast<ff::ff_t*>(std::malloc(n * sizeof(ff::ff_t)));
 
-  uint32_t* src = static_cast<uint32_t*>(sycl::malloc_shared(size, q));
-  uint32_t* fft_dst = static_cast<uint32_t*>(sycl::malloc_shared(size, q));
-  uint32_t* ifft_dst = static_cast<uint32_t*>(sycl::malloc_shared(size, q));
+  auto* ntt_a = static_cast<ff::ff_t*>(std::malloc(n * sizeof(ff::ff_t)));
+  auto* ntt_b = static_cast<ff::ff_t*>(std::malloc(n * sizeof(ff::ff_t)));
+  auto* ntt_c = static_cast<ff::ff_t*>(std::malloc(n * sizeof(ff::ff_t)));
+  auto* ntt_d = static_cast<ff::ff_t*>(std::malloc(n * sizeof(ff::ff_t)));
 
-  random_fill(src, dim);
-  sycl::event evt0 = q.memset(fft_dst, 0, size);
-  sycl::event evt1 = q.memset(ifft_dst, 0, size);
+  std::random_device rd;
+  std::mt19937_64 gen(rd());
+  std::uniform_int_distribution<uint16_t> dis{ 1, ff::Q - 1 };
 
-  std::vector<sycl::event> evts0 =
-    cooley_tukey_ntt(q, src, fft_dst, dim, wg_size, { evt0 });
-  std::vector<sycl::event> evts1 =
-    cooley_tukey_intt(q,
-                      fft_dst,
-                      ifft_dst,
-                      dim,
-                      wg_size,
-                      { evt0, evt1, evts0.at(evts0.size() - 1) });
-  evts1.at(evts1.size() - 1).wait();
-
-  for (size_t i = 0; i < dim; i++) {
-    assert(src[i] == ifft_dst[i]);
+  for (size_t i = 0; i < n; i++) {
+    poly_a[i] = ff::ff_t{ dis(gen) };
+    poly_b[i] = ff::ff_t{ dis(gen) };
   }
 
-  sycl::free(src, q);
-  sycl::free(fft_dst, q);
-  sycl::free(ifft_dst, q);
+  std::memcpy(ntt_a, poly_a, n * sizeof(ff::ff_t));
+  std::memcpy(ntt_b, poly_b, n * sizeof(ff::ff_t));
+
+  ntt::ntt<lgn>(ntt_a);
+  ntt::ntt<lgn>(ntt_b);
+
+  polynomial::mul<lgn>(ntt_a, ntt_b, ntt_c); // c = a * b
+  polynomial::div<lgn>(ntt_c, ntt_b, ntt_d); // d = c / b
+
+  std::memcpy(poly_d, ntt_d, n * sizeof(ff::ff_t));
+  ntt::intt<lgn>(poly_d);
+
+  bool flg = false;
+  for (size_t i = 0; i < n; i++) {
+    flg |= static_cast<bool>(poly_d[i].v ^ poly_a[i].v);
+  }
+
+  std::free(poly_a);
+  std::free(poly_b);
+  std::free(poly_d);
+  std::free(ntt_a);
+  std::free(ntt_b);
+  std::free(ntt_c);
+  std::free(ntt_d);
+
+  assert(!flg);
 }
 
 }
