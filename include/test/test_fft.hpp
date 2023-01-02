@@ -116,6 +116,9 @@ template<const size_t lgn>
 void
 test_fft_split_merge()
 {
+  constexpr bool flg = lgn >= 2 && lgn <= 10;
+  static_assert(flg, "Splits polynomials of length 2^[2..10]");
+
   constexpr size_t n = 1ul << lgn;
   constexpr size_t hn = n >> 1;
   constexpr size_t elen = sizeof(fft::cmplx);
