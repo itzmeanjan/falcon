@@ -1,5 +1,4 @@
 #pragma once
-#include "ntt.hpp"
 #include <cmath>
 #include <complex>
 #include <numbers>
@@ -9,6 +8,37 @@
 namespace fft {
 
 using cmplx = std::complex<double>;
+
+// Compile-time check to ensure that we're working with
+//
+// N ∈ [2..1024] && N = 2^k | k ∈ [1, 10]
+consteval bool
+check_log2n(const size_t lgn)
+{
+  return (lgn >= 1) && (lgn <= 10);
+}
+
+// Given a 64 -bit unsigned integer, this routine extracts specified many
+// contiguous bits from ( least significant bit ) LSB side & reverses their bit
+// order, returning bit reversed `mbw` -bit wide number
+//
+// See
+// https://github.com/itzmeanjan/falcon/blob/19a8593/include/ntt.hpp#L37-L57
+// for source of inspiration
+template<const size_t mbw>
+inline static constexpr size_t
+bit_rev(const size_t v)
+  requires(check_log2n(mbw))
+{
+  size_t v_rev = 0ul;
+
+  for (size_t i = 0; i < mbw; i++) {
+    const size_t bit = (v >> i) & 0b1;
+    v_rev ^= bit << (mbw - 1ul - i);
+  }
+
+  return v_rev;
+}
 
 // Given k ∈ [0, n), this routine computes e ^ (i * ((π * k) / n)) using Euler's
 // formula https://en.wikipedia.org/wiki/Euler%27s_formula
@@ -34,7 +64,7 @@ computeζ(const size_t k)
 template<const size_t LOG2N>
 inline void
 fft(cmplx* const __restrict vec)
-  requires(ntt::check_log2n(LOG2N))
+  requires(check_log2n(LOG2N))
 {
   constexpr size_t N = 1ul << LOG2N;
 
@@ -45,7 +75,7 @@ fft(cmplx* const __restrict vec)
 
     for (size_t start = 0; start < N; start += lenx2) {
       const size_t k_now = k_beg + (start >> (l + 1));
-      const auto ζ_exp = computeζ<N>(ntt::bit_rev<LOG2N>(k_now));
+      const auto ζ_exp = computeζ<N>(bit_rev<LOG2N>(k_now));
 
       for (size_t i = start; i < start + len; i++) {
         const auto tmp = ζ_exp * vec[i + len];
@@ -69,7 +99,7 @@ fft(cmplx* const __restrict vec)
 template<const size_t LOG2N>
 inline void
 ifft(cmplx* const __restrict vec)
-  requires(ntt::check_log2n(LOG2N))
+  requires(check_log2n(LOG2N))
 {
   constexpr size_t N = 1ul << LOG2N;
   constexpr double INV_N = 1. / static_cast<double>(N);
@@ -81,7 +111,7 @@ ifft(cmplx* const __restrict vec)
 
     for (size_t start = 0; start < N; start += lenx2) {
       const size_t k_now = k_beg - (start >> (l + 1));
-      const auto neg_ζ_exp = -computeζ<N>(ntt::bit_rev<LOG2N>(k_now));
+      const auto neg_ζ_exp = -computeζ<N>(bit_rev<LOG2N>(k_now));
 
       for (size_t i = start; i < start + len; i++) {
         const auto tmp = vec[i];
@@ -108,15 +138,14 @@ inline void
 split_fft(const cmplx* const __restrict f,
           cmplx* const __restrict f0,
           cmplx* const __restrict f1)
+  requires(check_log2n(LOG2N))
 {
-  static_assert(LOG2N > 0, "Input vector length must be >= 2");
-
   constexpr size_t N = 1ul << LOG2N;
   constexpr size_t hN = N >> 1;
   constexpr size_t qN = hN >> 1;
 
   if constexpr (LOG2N == 1) {
-    const auto ζ_exp = computeζ<N>(ntt::bit_rev<LOG2N>(1));
+    const auto ζ_exp = computeζ<N>(bit_rev<LOG2N>(1));
 
     f0[0] = 0.5 * (f[0] + f[1]);
     f1[0] = 0.5 * (f[0] - f[1]) * std::conj(ζ_exp);
@@ -125,12 +154,12 @@ split_fft(const cmplx* const __restrict f,
       f0[i] = 0.5 * (f[2 * i] + f[2 * i + 1]);
 
       if (i < qN) {
-        const auto ζ_exp = computeζ<N>(ntt::bit_rev<LOG2N>(hN + i * 2));
+        const auto ζ_exp = computeζ<N>(bit_rev<LOG2N>(hN + i * 2));
         const cmplx br[]{ std::conj(ζ_exp), ζ_exp };
 
         f1[i] = 0.5 * (f[2 * i] - f[2 * i + 1]) * br[i & 0b1ul];
       } else {
-        const auto ζ_exp = computeζ<N>(ntt::bit_rev<LOG2N>(hN + (i - qN) * 2));
+        const auto ζ_exp = computeζ<N>(bit_rev<LOG2N>(hN + (i - qN) * 2));
         const cmplx br[]{ ζ_exp, std::conj(ζ_exp) };
 
         f1[i] = 0.5 * (f[2 * i] - f[2 * i + 1]) * br[(i - qN) & 0b1ul];
