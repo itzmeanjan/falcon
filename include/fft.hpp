@@ -168,4 +168,43 @@ split_fft(const cmplx* const __restrict f,
   }
 }
 
+// Merges two polynomials f0, f1 into a single one f s.t. all of these
+// polynomials are in their FFT representation.
+//
+// This routine is an implementation of the algorithm 2, described on page 29 of
+// Falcon specification https://falcon-sign.info/falcon.pdf
+template<const size_t LOG2N>
+inline void
+merge_fft(const cmplx* const __restrict f0,
+          const cmplx* const __restrict f1,
+          cmplx* const __restrict f)
+{
+  constexpr size_t N = 1ul << LOG2N;
+  constexpr size_t hN = N >> 1;
+  constexpr size_t qN = hN >> 1;
+
+  if constexpr (LOG2N == 1) {
+    const auto ζ_exp = computeζ<N>(bit_rev<LOG2N>(1));
+
+    f[0] = f0[0] + f1[0] * ζ_exp;
+    f[1] = f0[0] - f1[0] * ζ_exp;
+  } else {
+    for (size_t i = 0; i < hN; i++) {
+      if (i < qN) {
+        const auto ζ_exp = computeζ<N>(bit_rev<LOG2N>(hN + i * 2));
+        const cmplx br[]{ ζ_exp, std::conj(ζ_exp) };
+
+        f[2 * i + 0] = f0[i] + f1[i] * br[i & 0b1ul];
+        f[2 * i + 1] = f0[i] - f1[i] * br[i & 0b1ul];
+      } else {
+        const auto ζ_exp = computeζ<N>(bit_rev<LOG2N>(hN + (i - qN) * 2));
+        const cmplx br[]{ std::conj(ζ_exp), ζ_exp };
+
+        f[2 * i + 0] = f0[i] + f1[i] * br[(i - qN) & 0b1ul];
+        f[2 * i + 1] = f0[i] - f1[i] * br[(i - qN) & 0b1ul];
+      }
+    }
+  }
+}
+
 }
