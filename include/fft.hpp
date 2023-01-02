@@ -142,29 +142,12 @@ split_fft(const cmplx* const __restrict f,
 {
   constexpr size_t N = 1ul << LOG2N;
   constexpr size_t hN = N >> 1;
-  constexpr size_t qN = hN >> 1;
 
-  if constexpr (LOG2N == 1) {
-    const auto ζ_exp = computeζ<N>(bit_rev<LOG2N>(1));
+  for (size_t i = 0; i < hN; i++) {
+    const auto ζ_exp = computeζ<N>(bit_rev<LOG2N>(hN + i));
 
-    f0[0] = 0.5 * (f[0] + f[1]);
-    f1[0] = 0.5 * (f[0] - f[1]) * std::conj(ζ_exp);
-  } else {
-    for (size_t i = 0; i < hN; i++) {
-      f0[i] = 0.5 * (f[2 * i] + f[2 * i + 1]);
-
-      if (i < qN) {
-        const auto ζ_exp = computeζ<N>(bit_rev<LOG2N>(hN + i * 2));
-        const cmplx br[]{ std::conj(ζ_exp), ζ_exp };
-
-        f1[i] = 0.5 * (f[2 * i] - f[2 * i + 1]) * br[i & 0b1ul];
-      } else {
-        const auto ζ_exp = computeζ<N>(bit_rev<LOG2N>(hN + (i - qN) * 2));
-        const cmplx br[]{ ζ_exp, std::conj(ζ_exp) };
-
-        f1[i] = 0.5 * (f[2 * i] - f[2 * i + 1]) * br[(i - qN) & 0b1ul];
-      }
-    }
+    f0[i] = 0.5 * (f[2 * i] + f[2 * i + 1]);
+    f1[i] = 0.5 * (f[2 * i] - f[2 * i + 1]) * std::conj(ζ_exp);
   }
 }
 
