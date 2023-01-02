@@ -1,10 +1,32 @@
 #pragma once
+#include "fft.hpp"
 #include "polynomial.hpp"
 #include <cassert>
 #include <cstring>
 
 // Test functional correctness of Falcon PQC suite implementation
 namespace test_falcon {
+
+// Splits a polynomial f into two polynomials f0, f1 s.t. all these polynomials
+// are in their coefficient representation.
+//
+// This routine is an implementation of equation 3.20, described in section 3.6,
+// on page 28 of the Falcon specification https://falcon-sign.info/falcon.pdf
+template<const size_t lgn>
+inline void
+split(const fft::cmplx* const __restrict f,
+      fft::cmplx* const __restrict f0,
+      fft::cmplx* const __restrict f1)
+  requires(fft::check_log2n(lgn))
+{
+  constexpr size_t n = 1ul << lgn;
+  constexpr size_t hn = n >> 1;
+
+  for (size_t i = 0; i < hn; i++) {
+    f0[i] = f[2 * i];
+    f1[i] = f[2 * i + 1];
+  }
+}
 
 // Ensure functional correctness of (i)FFT implementation, using polynomial
 // multiplication and division in FFT form, over C
