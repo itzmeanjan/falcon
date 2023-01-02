@@ -28,6 +28,26 @@ split(const fft::cmplx* const __restrict f,
   }
 }
 
+// Merges two polynomials f0, f1 into a single one f s.t. all these polynomials
+// are in their coefficient representation.
+//
+// This routine is an implementation of equation 3.22, described in section 3.6,
+// on page 28 of the Falcon specification https://falcon-sign.info/falcon.pdf
+template<const size_t lgn>
+inline void
+merge(const fft::cmplx* const __restrict f0,
+      const fft::cmplx* const __restrict f1,
+      fft::cmplx* const __restrict f)
+{
+  constexpr size_t n = 1ul << lgn;
+  constexpr size_t hn = n >> 1;
+
+  for (size_t i = 0; i < hn; i++) {
+    f[2 * i + 0] = f0[i];
+    f[2 * i + 1] = f1[i];
+  }
+}
+
 // Ensure functional correctness of (i)FFT implementation, using polynomial
 // multiplication and division in FFT form, over C
 //
