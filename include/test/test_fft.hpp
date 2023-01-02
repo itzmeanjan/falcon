@@ -17,7 +17,6 @@ inline void
 split(const fft::cmplx* const __restrict f,
       fft::cmplx* const __restrict f0,
       fft::cmplx* const __restrict f1)
-  requires(fft::check_log2n(lgn))
 {
   constexpr size_t n = 1ul << lgn;
   constexpr size_t hn = n >> 1;
@@ -57,7 +56,7 @@ template<const size_t lgn>
 void
 test_fft()
 {
-  const size_t n = 1ul << lgn;
+  constexpr size_t n = 1ul << lgn;
 
   auto* poly_a = static_cast<fft::cmplx*>(std::malloc(n * sizeof(fft::cmplx)));
   auto* poly_b = static_cast<fft::cmplx*>(std::malloc(n * sizeof(fft::cmplx)));
@@ -107,6 +106,92 @@ test_fft()
   std::free(fft_d);
 
   assert(!flg);
+}
+
+// Ensure that splitting and merging of polynomials in their FFT representation
+// is correctly implemented, following figure 3.2, describing relationship
+// between split, merge, split_fft, merge_fft, FFT and iFFT routines, on page 30
+// of the Falcon specification https://falcon-sign.info/falcon.pdf
+template<const size_t lgn>
+void
+test_fft_split_merge()
+{
+  constexpr size_t n = 1ul << lgn;
+  constexpr size_t hn = n >> 1;
+  constexpr size_t elen = sizeof(fft::cmplx);
+
+  auto* poly_f = static_cast<fft::cmplx*>(std::malloc(n * elen));
+  auto* poly_f0 = static_cast<fft::cmplx*>(std::malloc(hn * elen));
+  auto* poly_f1 = static_cast<fft::cmplx*>(std::malloc(hn * elen));
+
+  auto* fft_f = static_cast<fft::cmplx*>(std::malloc(n * elen));
+  auto* fft_f0 = static_cast<fft::cmplx*>(std::malloc(hn * elen));
+  auto* fft_f1 = static_cast<fft::cmplx*>(std::malloc(hn * elen));
+
+  auto* ifft_f = static_cast<fft::cmplx*>(std::malloc(n * elen));
+  auto* ifft_f0 = static_cast<fft::cmplx*>(std::malloc(hn * elen));
+  auto* ifft_f1 = static_cast<fft::cmplx*>(std::malloc(hn * elen));
+
+  std::random_device rd;
+  std::mt19937_64 gen(rd());
+  std::uniform_int_distribution<int> dis{ -3, 4 };
+
+  for (size_t i = 0; i < n; i++) {
+    poly_f[i] = fft::cmplx{ static_cast<double>(dis(gen)) };
+  }
+
+  split<lgn>(poly_f, poly_f0, poly_f1); // f -> f_0, f_1
+
+  std::memcpy(fft_f, poly_f, n * elen);
+
+  fft::fft<lgn>(fft_f);                       // f --(FFT)--> f^
+  fft::split_fft<lgn>(fft_f, fft_f0, fft_f1); // f^ -> f^_0, f^_1
+
+  std::memcpy(ifft_f0, fft_f0, hn * elen);
+  std::memcpy(ifft_f1, fft_f1, hn * elen);
+
+  fft::ifft<lgn - 1>(ifft_f0); // f^_0 --(iFFT)--> f_0
+  fft::ifft<lgn - 1>(ifft_f1); // f^_1 --(iFFT)--> f_1
+
+  fft::merge_fft<lgn>(fft_f0, fft_f1, ifft_f); // f^_0, f^_1 -> f^
+  fft::ifft<lgn>(ifft_f);                      // f^ --(iFFT)--> f
+
+  for (size_t i = 0; i < hn; i++) {
+    ifft_f0[i] = fft::cmplx{ std::round(ifft_f0[i].real()) };
+    ifft_f1[i] = fft::cmplx{ std::round(ifft_f1[i].real()) };
+  }
+
+  for (size_t i = 0; i < n; i++) {
+    ifft_f[i] = fft::cmplx{ std::round(ifft_f[i].real()) };
+  }
+
+  bool flg0 = false;
+  bool flg1 = false;
+
+  for (size_t i = 0; i < hn; i++) {
+    flg0 |= (ifft_f0[i] != poly_f0[i]);
+    flg1 |= (ifft_f1[i] != poly_f1[i]);
+  }
+
+  bool flg2 = false;
+
+  for (size_t i = 0; i < n; i++) {
+    flg2 |= (ifft_f[i] != poly_f[i]);
+  }
+
+  std::free(poly_f);
+  std::free(poly_f0);
+  std::free(poly_f1);
+  std::free(fft_f);
+  std::free(fft_f0);
+  std::free(fft_f1);
+  std::free(ifft_f);
+  std::free(ifft_f0);
+  std::free(ifft_f1);
+
+  assert(!flg0);
+  assert(!flg1);
+  assert(!flg2);
 }
 
 }
