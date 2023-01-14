@@ -33,7 +33,7 @@ struct u72_t
 
   // Given two 72 -bit unsigned integers, this routine subtracts one from
   // another, computing resulting 72 -bit unsigned integer
-  inline constexpr u72_t operator-(const u72_t& rhs)
+  inline constexpr u72_t operator-(const u72_t& rhs) const
   {
     const uint64_t lo = this->lo - rhs.lo;
     const bool flg = this->lo < rhs.lo;
@@ -41,6 +41,23 @@ struct u72_t
 
     return { hi, lo };
   }
+
+  // Given two 72 -bit unsigned integers, this routine performs comparison s.t.
+  // it returns boolean truth value if and only if lhs > rhs
+  inline constexpr bool operator>(const u72_t& rhs) const
+  {
+    const bool flg0 = this->hi > rhs.hi;
+    const bool flg1 = this->hi == rhs.hi;
+    const bool flg2 = this->hi < rhs.hi;
+    const bool flg3 = this->lo > rhs.lo;
+
+    const bool flg = flg0 | (flg1 & flg3) | (!flg2 & !flg1);
+    return flg;
+  }
+
+  // Given two 72 -bit unsigned integers, this routine performs comparison s.t.
+  // it returns boolean truth value if and only if lhs < rhs
+  inline constexpr bool operator<(const u72_t& rhs) { return rhs > *this; }
 
   // Given 9 bytes, this routine computes a 72 -bit unsigned integer s.t. these
   // bytes are interpreted in little-endian byte order.
