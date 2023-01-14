@@ -1,6 +1,8 @@
 #pragma once
 #include "ff.hpp"
+#include <iomanip>
 #include <random>
+#include <sstream>
 #include <type_traits>
 
 // Fill memory allocation with `len` -many random elements of unsigned integral
@@ -23,6 +25,20 @@ random_fill(T* const data, const size_t len)
   for (size_t i = 0; i < len; i++) {
     data[i] = dis(gen);
   }
+}
+
+// Converts a byte array into hex string; see
+// https://stackoverflow.com/a/14051107
+inline const std::string
+to_hex(const uint8_t* const bytes, const size_t len)
+{
+  std::stringstream ss;
+  ss << std::hex;
+
+  for (size_t i = 0; i < len; i++) {
+    ss << std::setw(2) << std::setfill('0') << static_cast<uint32_t>(bytes[i]);
+  }
+  return ss.str();
 }
 
 // Computes binary logarithm of `n`, when n is power of 2
