@@ -22,7 +22,8 @@ struct u72_t
 
   // Given 9 bytes, this routine computes a 72 -bit unsigned integer s.t. these
   // bytes are interpreted in little-endian byte order.
-  inline constexpr u72_t from_be_bytes(const std::array<uint8_t, 9> bytes)
+  static inline constexpr u72_t from_be_bytes(
+    const std::array<uint8_t, 9> bytes)
   {
     const uint8_t hi = bytes[0];
     uint64_t lo = 0ul;
@@ -36,7 +37,7 @@ struct u72_t
 
   // Given an unsigned 72 -bit integer, this routine interprets its bytes in
   // big-endian order and returns a byte array of length 9.
-  inline constexpr std::array<uint8_t, 9> to_be_bytes()
+  inline constexpr std::array<uint8_t, 9> to_be_bytes() const
   {
     std::array<uint8_t, 9> res{};
 
@@ -51,7 +52,8 @@ struct u72_t
 
   // Given 9 bytes, this routine computes a 72 -bit unsigned integer s.t. these
   // bytes are interpreted in big-endian byte order.
-  inline constexpr u72_t from_le_bytes(const std::array<uint8_t, 9> bytes)
+  static inline constexpr u72_t from_le_bytes(
+    const std::array<uint8_t, 9> bytes)
   {
     const uint8_t hi = bytes[8];
     uint64_t lo = 0ul;
@@ -65,7 +67,7 @@ struct u72_t
 
   // Given an unsigned 72 -bit integer, this routine interprets its bytes in
   // little-endian order and returns a byte array of length 9.
-  inline constexpr std::array<uint8_t, 9> to_le_bytes()
+  inline constexpr std::array<uint8_t, 9> to_le_bytes() const
   {
     std::array<uint8_t, 9> res{};
 
