@@ -20,6 +20,8 @@ struct u72_t
     this->lo = lo;
   }
 
+  static inline constexpr u72_t zero() { return { 0ul, 0ul }; }
+
   // Given two 72 -bit unsigned integers, this routine adds them, computing
   // resulting 72 -bit unsigned integer
   inline constexpr u72_t operator+(const u72_t& rhs) const
