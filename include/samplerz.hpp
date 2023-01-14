@@ -1,11 +1,18 @@
 #pragma once
 #include "common.hpp"
 #include "u72.hpp"
+#include <algorithm>
 #include <cmath>
 #include <utility>
 
 // Sampler over the Integers
 namespace samplerz {
+
+// = math.log(2)
+constexpr double LN2 = 0.6931471805599453;
+
+// = 1/ math.log(2)
+constexpr double INV_LN2 = 1. / LN2;
 
 // Scaled ( by a factor 2^72 ) Probability Distribution Table, taken from
 // table 3.1 of ( on page 41 ) of Falcon specification
@@ -206,6 +213,34 @@ approx_exp(const double x, const double ccs)
   y = top_63_bits(t0);
 
   return y;
+}
+
+// Computes a single bit ( = 1 ) with probability ≈ ccs * e^−x | ccs, x >= 0
+//
+// This is an implementation of algorithm 14, described on page 43 of Falcon
+// specification https://falcon-sign.info/falcon.pdf
+static inline uint8_t
+ber_exp(const double x, const double ccs)
+{
+  const double s = std::floor(x * INV_LN2);
+  const double r = x - s * LN2;
+  const uint64_t s_ = std::min(static_cast<uint64_t>(s), 63ull);
+  const uint64_t z = (2 * approx_exp(r, ccs) - 1) >> s_;
+
+  std::random_device rd;
+  std::mt19937_64 gen(rd());
+  std::uniform_int_distribution<uint8_t> dis{};
+
+  int32_t w = 0;
+  int64_t i = 64l;
+  do {
+    i = i - 8l;
+
+    const uint8_t t0 = dis(gen);
+    w = static_cast<int32_t>(t0) - static_cast<int32_t>((z >> i) & 0xfful);
+  } while ((w == 0) && (i > 0l));
+
+  return w < 0;
 }
 
 }
