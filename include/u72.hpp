@@ -65,7 +65,10 @@ struct u72_t
 
   // Given two 72 -bit unsigned integers, this routine performs comparison s.t.
   // it returns boolean truth value if and only if lhs < rhs
-  inline constexpr bool operator<(const u72_t& rhs) { return rhs > *this; }
+  inline constexpr bool operator<(const u72_t& rhs) const
+  {
+    return rhs > *this;
+  }
 
   // Given 9 bytes, this routine computes a 72 -bit unsigned integer s.t. these
   // bytes are interpreted in little-endian byte order.
