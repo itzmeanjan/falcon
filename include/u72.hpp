@@ -26,7 +26,18 @@ struct u72_t
   {
     const uint64_t lo = this->lo + rhs.lo;
     const bool flg = this->lo > UINT64_MAX - rhs.lo;
-    const uint64_t hi = this->hi + rhs.hi + flg * 1ul;
+    const uint64_t hi = (this->hi + rhs.hi + flg * 1ul) & 0xfful;
+
+    return { hi, lo };
+  }
+
+  // Given two 72 -bit unsigned integers, this routine subtracts one from
+  // another, computing resulting 72 -bit unsigned integer
+  inline constexpr u72_t operator-(const u72_t& rhs)
+  {
+    const uint64_t lo = this->lo - rhs.lo;
+    const bool flg = this->lo < rhs.lo;
+    const uint64_t hi = (this->hi - (rhs.hi + 1ul * flg)) & 0xfful;
 
     return { hi, lo };
   }
