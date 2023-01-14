@@ -57,4 +57,12 @@ constexpr u72::u72_t CDT[]{
   ith_cumulative_distribution(18),
 };
 
+// Scaled ( by a factor 2^72 ) Reverse Cumulative Distribution Table, computed
+// at compile-time, following formula on top of page 41 of Falcon specification
+// https://falcon-sign.info/falcon.pdf
+constexpr u72::u72_t RCDT[]{ -CDT[0],  -CDT[1],  -CDT[2],  -CDT[3],  -CDT[4],
+                             -CDT[5],  -CDT[6],  -CDT[7],  -CDT[8],  -CDT[9],
+                             -CDT[10], -CDT[11], -CDT[12], -CDT[13], -CDT[14],
+                             -CDT[15], -CDT[16], -CDT[17], -CDT[18] };
+
 }
