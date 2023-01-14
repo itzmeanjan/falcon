@@ -1,6 +1,7 @@
 #pragma once
 #include "common.hpp"
 #include "u72.hpp"
+#include <utility>
 
 // Sampler over the Integers
 namespace samplerz {
@@ -64,5 +65,32 @@ constexpr u72::u72_t RCDT[]{ -CDT[0],  -CDT[1],  -CDT[2],  -CDT[3],  -CDT[4],
                              -CDT[5],  -CDT[6],  -CDT[7],  -CDT[8],  -CDT[9],
                              -CDT[10], -CDT[11], -CDT[12], -CDT[13], -CDT[14],
                              -CDT[15], -CDT[16], -CDT[17], -CDT[18] };
+
+// BaseSampler routine as defined in algorithm 12 of Falcon specification
+// https://falcon-sign.info/falcon.pdf
+//
+// Note it's possible that caller of this function might want to fill the bytes
+// array themselves, in that case, they should set template parameter's value to
+// `false`. In default case, byte array can be empty and 9 random bytes will be
+// sampled using Uniform Integer Distribution, while seeding Mersenne Twister
+// Engine with system randomness. I strongly suggest you to look at
+// `random_fill` function, that's invoked below.
+template<const bool sample = true>
+static inline uint32_t
+base_sampler(std::array<uint8_t, 9> bytes = {})
+{
+  if constexpr (sample) {
+    random_fill(bytes.data(), bytes.size());
+  }
+
+  const u72::u72_t u = u72::u72_t::from_le_bytes(std::move(bytes));
+
+  uint32_t z0 = 0u;
+  for (size_t i = 0; i < 18; i++) {
+    z0 = z0 + 1u * (u < RCDT[i]);
+  }
+
+  return z0;
+}
 
 }
