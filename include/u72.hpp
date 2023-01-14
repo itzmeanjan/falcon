@@ -14,10 +14,21 @@ struct u72_t
   uint64_t hi = 0ul;
   uint64_t lo = 0ul;
 
-  inline constexpr u72_t(const uint8_t hi = 0, const uint64_t lo = 0ul)
+  inline constexpr u72_t(const uint64_t hi = 0ul, const uint64_t lo = 0ul)
   {
     this->hi = hi;
     this->lo = lo;
+  }
+
+  // Given two 72 -bit unsigned integers, this routine adds them, computing
+  // resulting 72 -bit unsigned integer
+  inline constexpr u72_t operator+(const u72_t& rhs) const
+  {
+    const uint64_t lo = this->lo + rhs.lo;
+    const bool flg = this->lo > UINT64_MAX - rhs.lo;
+    const uint64_t hi = this->hi + rhs.hi + flg * 1ul;
+
+    return { hi, lo };
   }
 
   // Given 9 bytes, this routine computes a 72 -bit unsigned integer s.t. these
@@ -25,14 +36,14 @@ struct u72_t
   static inline constexpr u72_t from_be_bytes(
     const std::array<uint8_t, 9> bytes)
   {
-    const uint8_t hi = bytes[0];
+    const uint64_t hi = static_cast<uint64_t>(bytes[0]);
     uint64_t lo = 0ul;
 
     for (size_t i = 0; i < 8; i++) {
       lo |= static_cast<uint64_t>(bytes[1 + i]) << (7 - i) * 8;
     }
 
-    return u72_t{ hi, lo };
+    return { hi, lo };
   }
 
   // Given an unsigned 72 -bit integer, this routine interprets its bytes in
@@ -55,14 +66,14 @@ struct u72_t
   static inline constexpr u72_t from_le_bytes(
     const std::array<uint8_t, 9> bytes)
   {
-    const uint8_t hi = bytes[8];
+    const uint64_t hi = static_cast<uint64_t>(bytes[8]);
     uint64_t lo = 0ul;
 
     for (size_t i = 0; i < 8; i++) {
       lo |= static_cast<uint64_t>(bytes[i]) << (i * 8);
     }
 
-    return u72_t{ hi, lo };
+    return { hi, lo };
   }
 
   // Given an unsigned 72 -bit integer, this routine interprets its bytes in
