@@ -243,4 +243,43 @@ ber_exp(const double x, const double ccs)
   return w < 0;
 }
 
+// Given floating point arguments μ, σ' | σ' ∈ [σ_min, σ_max], integer z ∈ Z,
+// sampled from a distribution very close to D_{Z, μ, σ′}, following algorithm
+// 15 of Falcon specification https://falcon-sign.info/falcon.pdf
+static inline int32_t
+samplerz(const double μ,
+         const double σ_prime,
+         const double σ_min,
+         const double σ_max)
+{
+  const double r = μ - std::floor(μ);
+  const double ccs = σ_min / σ_prime;
+
+  const double t0 = 1. / (2. * σ_prime * σ_prime);
+  const double t1 = 1. / (2. * σ_max * σ_max);
+
+  std::random_device rd;
+  std::mt19937_64 gen(rd());
+  std::uniform_int_distribution<uint8_t> dis{};
+
+  while (true) {
+    const auto z0 = base_sampler();
+    const auto b = dis(gen) & 0b1;
+    const auto z = static_cast<double>(b + (2 * b - 1) * z0);
+
+    const auto t2 = z - r;
+    const auto t3 = t2 * t2;
+    const auto t4 = t3 * t0;
+
+    const auto t5 = static_cast<double>(z0 * z0);
+    const auto t6 = t5 * t1;
+
+    const auto x = t4 - t6;
+    const auto t7 = ber_exp(x, ccs);
+    if (t7 == 1) {
+      return static_cast<int32_t>(z + std::floor(μ));
+    }
+  }
+}
+
 }
