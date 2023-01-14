@@ -44,6 +44,12 @@ struct u72_t
     return { hi, lo };
   }
 
+  // Given a 72 -bit unsigned integer, this routine negates that element ( in ),
+  // computing 72 -bit result ( out ) s.t.
+  //
+  // out = (2^72 - in) % 2^72 i.e. result gets wrapper around at boundary 2^72
+  inline constexpr u72_t operator-() const { return u72_t::zero() - *this; }
+
   // Given two 72 -bit unsigned integers, this routine performs comparison s.t.
   // it returns boolean truth value if and only if lhs > rhs
   inline constexpr bool operator>(const u72_t& rhs) const
