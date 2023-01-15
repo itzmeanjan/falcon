@@ -26,5 +26,9 @@ main()
   test_falcon::test_fft_split_merge<10>();
   std::cout << "[test] Splitting and merging of polynomials in FFT form\n";
 
+  test_falcon::test_falcon512_samplerz();
+  test_falcon::test_falcon1024_samplerz();
+  std::cout << "[test] Sampler over the Integers, using KATs\n";
+
   return EXIT_SUCCESS;
 }

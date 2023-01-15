@@ -1,5 +1,6 @@
 #pragma once
 #include "samplerz.hpp"
+#include <cassert>
 
 // Test functional correctness of Falcon PQC suite implementation
 namespace test_falcon {
@@ -15628,5 +15629,51 @@ const samplerz_kat_t falcon1024_samplerz_kats[]{
     "2FB0C86ECE8D0416D6AF13",
     220 }
 };
+
+// Test that samplerZ routine is correctly implemented using Falcon512 parameter
+// set and Known Answer Tests, submitted along with Falcon's NIST submission
+// package.
+void
+test_falcon512_samplerz()
+{
+  for (auto kat : falcon512_samplerz_kats) {
+    std::vector<uint8_t> rbytes(kat.rbytes.length() / 2, 0);
+    to_byte_array(kat.rbytes, rbytes.data());
+
+    const auto μ = kat.μ;
+    const auto σ_prime = kat.σ_prime;
+    const auto σ_min = kat.σ_min;
+    const uint8_t* const data = rbytes.data();
+    const size_t dlen = rbytes.size();
+
+    const auto [z, blen] = samplerz::samplerz(μ, σ_prime, σ_min, data, dlen);
+
+    assert(dlen == blen); // ensure all random bytes were consumed
+    assert(z == kat.z);   // ensure sampled z matches expected z ∈ Z
+  }
+}
+
+// Test that samplerZ routine is correctly implemented using Falcon1024
+// parameter set and Known Answer Tests, submitted along with Falcon's NIST
+// submission package.
+void
+test_falcon1024_samplerz()
+{
+  for (auto kat : falcon1024_samplerz_kats) {
+    std::vector<uint8_t> rbytes(kat.rbytes.length() / 2, 0);
+    to_byte_array(kat.rbytes, rbytes.data());
+
+    const auto μ = kat.μ;
+    const auto σ_prime = kat.σ_prime;
+    const auto σ_min = kat.σ_min;
+    const uint8_t* const data = rbytes.data();
+    const size_t dlen = rbytes.size();
+
+    const auto [z, blen] = samplerz::samplerz(μ, σ_prime, σ_min, data, dlen);
+
+    assert(dlen == blen); // ensure all random bytes were consumed
+    assert(z == kat.z);   // ensure sampled z matches expected z ∈ Z
+  }
+}
 
 }
