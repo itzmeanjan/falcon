@@ -235,7 +235,7 @@ ber_exp(const double x, const double ccs)
 {
   const double s = std::floor(x * INV_LN2);
   const double r = x - s * LN2;
-  const uint64_t s_ = std::min(static_cast<uint64_t>(s), 63ull);
+  const uint64_t s_ = std::min<uint64_t>(static_cast<uint64_t>(s), 63ul);
   const uint64_t z = (2 * approx_exp(r, ccs) - 1) >> s_;
 
   std::random_device rd;
@@ -274,7 +274,7 @@ ber_exp(const double x,
 {
   const double s = std::floor(x * INV_LN2);
   const double r = x - s * LN2;
-  const uint64_t s_ = std::min(static_cast<uint64_t>(s), 63ull);
+  const uint64_t s_ = std::min<uint64_t>(static_cast<uint64_t>(s), 63ul);
   const uint64_t z = (2 * approx_exp(r, ccs) - 1) >> s_;
 
   size_t ridx = 0;
