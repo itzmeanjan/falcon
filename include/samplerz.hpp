@@ -243,6 +243,43 @@ ber_exp(const double x, const double ccs)
   return w < 0;
 }
 
+// Computes a single bit ( = 1 ) with probability ≈ ccs * e^−x | ccs, x >= 0
+//
+// This is an implementation of algorithm 14, described on page 43 of Falcon
+// specification https://falcon-sign.info/falcon.pdf
+//
+// Note, there's another function with almost similar signature, but that one
+// doesn't take any random bytes array, rather samples randomness itself.
+// Whereas this routine expects you to also pass pointer to some memory location
+// where consecutive memory addresses hold `rblen` -many random sampled bytes.
+// This routine takes randomness from that array and also return how many random
+// bytes it had to use to finish executing the body of the do-while loop, so
+// that next user of random bytes can just skip forward those many bytes.
+static inline std::pair<uint8_t, size_t>
+ber_exp(const double x,
+        const double ccs,
+        const uint8_t* const rbytes,
+        const size_t rblen)
+{
+  const double s = std::floor(x * INV_LN2);
+  const double r = x - s * LN2;
+  const uint64_t s_ = std::min(static_cast<uint64_t>(s), 63ull);
+  const uint64_t z = (2 * approx_exp(r, ccs) - 1) >> s_;
+
+  size_t ridx = 0;
+  int32_t w = 0;
+  int64_t i = 64l;
+
+  do {
+    i = i - 8l;
+
+    const uint8_t t0 = rbytes[ridx++];
+    w = static_cast<int32_t>(t0) - static_cast<int32_t>((z >> i) & 0xfful);
+  } while ((w == 0) && (i > 0l) && (ridx < rblen));
+
+  return std::make_pair(w < 0, ridx);
+}
+
 // Given floating point arguments μ, σ' | σ' ∈ [σ_min, σ_max], integer z ∈ Z,
 // sampled from a distribution very close to D_{Z, μ, σ′}, following algorithm
 // 15 of Falcon specification https://falcon-sign.info/falcon.pdf
