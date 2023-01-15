@@ -2,7 +2,9 @@
 #include "common.hpp"
 #include "u72.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstring>
 #include <utility>
 
 // Sampler over the Integers
@@ -315,6 +317,59 @@ samplerz(const double μ,
     const auto t7 = ber_exp(x, ccs);
     if (t7 == 1) {
       return static_cast<int32_t>(z + std::floor(μ));
+    }
+  }
+}
+
+// Given floating point arguments μ, σ' | σ' ∈ [σ_min, σ_max], integer z ∈ Z,
+// sampled from a distribution very close to D_{Z, μ, σ′}, following algorithm
+// 15 of Falcon specification https://falcon-sign.info/falcon.pdf
+//
+// Note, there's another function with almost similar signature, but that one
+// doesn't take any random bytes array, rather samples randomness itself.
+// Whereas this routine expects you to also pass pointer to some memory location
+// where consecutive memory addresses hold `rblen` -many random sampled bytes.
+// This routine takes randomness from that array and also return how many random
+// bytes it had to use to finish executing the body of the while loop. This
+// routine is written such that I can easily write test cases using KATs (known
+// answer tests) suppiled with Falcon's NIST submission, for easing correct
+// implementation of SamplerZ routine.
+static inline std::pair<int32_t, size_t>
+samplerz(const double μ,
+         const double σ_prime,
+         const double σ_min,
+         const double σ_max,
+         const uint8_t* const rbytes,
+         const size_t rblen)
+{
+  const double r = μ - std::floor(μ);
+  const double ccs = σ_min / σ_prime;
+
+  const double t0 = 1. / (2. * σ_prime * σ_prime);
+  const double t1 = 1. / (2. * σ_max * σ_max);
+
+  size_t ridx = 0;
+  while (ridx < rblen) {
+    std::array<uint8_t, 9> tmp{};
+    std::memcpy(tmp.data(), rbytes + ridx, 9);
+    ridx += 9;
+
+    const auto z0 = base_sampler<false>(std::move(tmp));
+    const auto b = rbytes[ridx++] & 0b1;
+    const auto z = static_cast<double>(b + (2 * b - 1) * z0);
+
+    const auto t2 = z - r;
+    const auto t3 = t2 * t2;
+    const auto t4 = t3 * t0;
+
+    const auto t5 = static_cast<double>(z0 * z0);
+    const auto t6 = t5 * t1;
+
+    const auto x = t4 - t6;
+    const auto [t7, ulen] = ber_exp(x, ccs, rbytes + ridx, rblen - ridx);
+    ridx += ulen;
+    if (t7 == 1) {
+      return std::make_pair(static_cast<int32_t>(z + std::floor(μ)), ridx);
     }
   }
 }
