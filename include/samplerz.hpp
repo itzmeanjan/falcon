@@ -1,277 +1,388 @@
 #pragma once
 #include "common.hpp"
 #include "u72.hpp"
-#include <oneapi/dpl/random>
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstring>
+#include <utility>
 
+// Sampler over the Integers
 namespace samplerz {
 
-// Upper bound on all the values of sigma
-// See
-// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/samplerz.py#L9-L11
-constexpr double MAX_SIGMA = 1.8205;
-constexpr double INV_SIGMA2 = 1. / (2. * MAX_SIGMA * MAX_SIGMA);
-
-// Bit precision of RCDT
-// See
-// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/samplerz.py#L13-L14
-constexpr uint64_t RCDT_PREC = 72;
-
-// Reverse cumulative distribution table, taken from column three of table 3.1
-// of Falcon specification https://falcon-sign.info/falcon.pdf
-const char* const RCDT[19] = { "3024686241123004913666",
-                               "1564742784480091954050",
-                               "636254429462080897535",
-                               "199560484645026482916",
-                               "47667343854657281903",
-                               "8595902006365044063",
-                               "1163297957344668388",
-                               "117656387352093658",
-                               "8867391802663976",
-                               "496969357462633",
-                               "20680885154299",
-                               "638331848991",
-                               "14602316184",
-                               "247426747",
-                               "3104126",
-                               "28824",
-                               "198",
-                               "1",
-                               "0" };
-
-// See RCDT table; RCDT_LEN[i] = len(RCDT[i]) | i = {0, 1, 2, ... 17, 18}
-const size_t RCDT_LEN[19] = { 22ul, 22ul, 21ul, 21ul, 20ul, 19ul, 19ul,
-                              18ul, 16ul, 15ul, 14ul, 12ul, 11ul, 9ul,
-                              7ul,  5ul,  3ul,  1ul,  1ul };
-
-// Constants taken from step 1 of algorithm 13 in Falcon specification
-// https://falcon-sign.info/falcon.pdf
-constexpr uint64_t C[13] = { 0x00000004741183A3ul, 0x00000036548CFC06ul,
-                             0x0000024FDCBF140Aul, 0x0000171D939DE045ul,
-                             0x0000D00CF58F6F84ul, 0x000680681CF796E3ul,
-                             0x002D82D8305B0FEAul, 0x011111110E066FD0ul,
-                             0x0555555555070F00ul, 0x155555555581FF00ul,
-                             0x400000000002B400ul, 0x7FFFFFFFFFFF4800ul,
-                             0x8000000000000000ul };
-
-// $ python3
-// >>> import math
-// >>> math.log(2)
+// = math.log(2)
 constexpr double LN2 = 0.6931471805599453;
-// $ python3
-// >>> import math
-// >>> 1/ math.log(2)
-constexpr double ILN2 = 1.4426950408889634;
 
-// See algorithm 12 of Falcon specification https://falcon-sign.info/falcon.pdf;
-// you may also want to see
-// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/samplerz.py#L65-L76
-const uint32_t
-base_sampler(oneapi::dpl::minstd_rand eng,
-             oneapi::dpl::uniform_int_distribution<uint8_t> dis)
+// = 1/ math.log(2)
+constexpr double INV_LN2 = 1. / LN2;
+
+// See table 3.3 of Falcon specification https://falcon-sign.info/falcon.pdf
+constexpr double FALCON512_σ_min = 1.277833697;
+
+// See table 3.3 of Falcon specification https://falcon-sign.info/falcon.pdf
+constexpr double FALCON1024_σ_min = 1.298280334;
+
+// See table 3.3 of Falcon specification https://falcon-sign.info/falcon.pdf
+constexpr double σ_max = 1.8205;
+
+// Scaled ( by a factor 2^72 ) Probability Distribution Table, taken from
+// table 3.1 of ( on page 41 ) of Falcon specification
+// https://falcon-sign.info/falcon.pdf
+constexpr u72::u72_t PDT[]{ { 92ul, 579786965361551358ul },
+                            { 79ul, 2650674819858381952ul },
+                            { 50ul, 6151151332533475715ul },
+                            { 23ul, 12418831121734727451ul },
+                            { 8ul, 4319188200692788085ul },
+                            { 2ul, 2177953700873134608ul },
+                            { 0ul, 7432604049020375675ul },
+                            { 0ul, 1045641569992574730ul },
+                            { 0ul, 108788995549429682ul },
+                            { 0ul, 8370422445201343ul },
+                            { 0ul, 476288472308334ul },
+                            { 0ul, 20042553305308ul },
+                            { 0ul, 623729532807ul },
+                            { 0ul, 14354889437ul },
+                            { 0ul, 244322621ul },
+                            { 0ul, 3075302ul },
+                            { 0ul, 28626ul },
+                            { 0ul, 197ul },
+                            { 0ul, 1ul } };
+
+// Compile-time computes i-th cumulative distribution | i ∈ [0, 19)
+inline consteval u72::u72_t
+ith_cumulative_distribution(const size_t i)
 {
-  uint8_t bytes[9];
-  for (size_t i = 0; i < 9; i++) {
-    bytes[i] = dis(eng);
+  auto acc = u72::u72_t::zero();
+
+  for (size_t j = 0; j <= i; j++) {
+    acc = acc + PDT[j];
   }
 
-  const u72::u72 u = u72::from_bytes(bytes);
-  uint32_t z0 = 0;
+  return acc;
+}
 
-  for (size_t i = 0; i < 19; i++) {
-    u72::u72 v = u72::from_decimal(RCDT[i], RCDT_LEN[i]);
+// Scaled ( by a factor 2^72 ) Cumulative Distribution Table, computed at
+// compile-time, following formula on top of page 41 of Falcon specification
+// https://falcon-sign.info/falcon.pdf
+constexpr u72::u72_t CDT[]{
+  ith_cumulative_distribution(0),  ith_cumulative_distribution(1),
+  ith_cumulative_distribution(2),  ith_cumulative_distribution(3),
+  ith_cumulative_distribution(4),  ith_cumulative_distribution(5),
+  ith_cumulative_distribution(6),  ith_cumulative_distribution(7),
+  ith_cumulative_distribution(8),  ith_cumulative_distribution(9),
+  ith_cumulative_distribution(10), ith_cumulative_distribution(11),
+  ith_cumulative_distribution(12), ith_cumulative_distribution(13),
+  ith_cumulative_distribution(14), ith_cumulative_distribution(15),
+  ith_cumulative_distribution(16), ith_cumulative_distribution(17),
+  ith_cumulative_distribution(18),
+};
 
-    z0 += (u72::cmp(u, v) == -1); // u < v ? 1 : 0
+// Scaled ( by a factor 2^72 ) Reverse Cumulative Distribution Table, computed
+// at compile-time, following formula on top of page 41 of Falcon specification
+// https://falcon-sign.info/falcon.pdf
+constexpr u72::u72_t RCDT[]{ -CDT[0],  -CDT[1],  -CDT[2],  -CDT[3],  -CDT[4],
+                             -CDT[5],  -CDT[6],  -CDT[7],  -CDT[8],  -CDT[9],
+                             -CDT[10], -CDT[11], -CDT[12], -CDT[13], -CDT[14],
+                             -CDT[15], -CDT[16], -CDT[17], -CDT[18] };
+
+// C contains the coefficients of a polynomial that approximates e^-x
+//
+// More precisely, the value:
+//
+//  (2 ^ -63) * sum(C[12 - i] * (x ** i) for i in range(i))
+//
+// Should be very close to e^-x.
+// This polynomial is lifted from FACCT: https://doi.org/10.1109/TC.2019.2940949
+//
+// These cofficients are taken from top of page 42 of Falcon specification
+// https://falcon-sign.info/falcon.pdf
+constexpr uint64_t C[]{ 0x00000004741183A3ul, 0x00000036548CFC06ul,
+                        0x0000024FDCBF140Aul, 0x0000171D939DE045ul,
+                        0x0000D00CF58F6F84ul, 0x000680681CF796E3ul,
+                        0x002D82D8305B0FEAul, 0x011111110E066FD0ul,
+                        0x0555555555070F00ul, 0x155555555581FF00ul,
+                        0x400000000002B400ul, 0x7FFFFFFFFFFF4800ul,
+                        0x8000000000000000ul };
+
+// BaseSampler routine as defined in algorithm 12 of Falcon specification
+// https://falcon-sign.info/falcon.pdf
+//
+// Note it's possible that caller of this function might want to fill the bytes
+// array themselves, in that case, they should set template parameter's value to
+// `false`. In default case, byte array can be empty and 9 random bytes will be
+// sampled using Uniform Integer Distribution, while seeding Mersenne Twister
+// Engine with system randomness. I strongly suggest you to look at
+// `random_fill` function, that's invoked below.
+template<const bool sample = true>
+static inline uint32_t
+base_sampler(std::array<uint8_t, 9> bytes = {})
+{
+  if constexpr (sample) {
+    random_fill(bytes.data(), bytes.size());
+  }
+
+  const u72::u72_t u = u72::u72_t::from_le_bytes(std::move(bytes));
+
+  uint32_t z0 = 0u;
+  for (size_t i = 0; i < 18; i++) {
+    z0 = z0 + 1u * (u < RCDT[i]);
   }
 
   return z0;
 }
 
-// Note, this implementation is strictly for testing correctness of samplerz
-// implementation; random bytes are pre-generated, taken from Falcon
-// specification's table 3.2
+// Given two 64 -bit unsigned integer operands, this routine multiplies them
+// such that high and low 64 -bit limbs of 128 -bit result in accessible.
 //
-// See algorithm 12 of Falcon specification https://falcon-sign.info/falcon.pdf;
-// you may also want to see
-// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/samplerz.py#L65-L76
-const uint32_t
-base_sampler(uint8_t* const bytes // 9 bytes are passed
-)
+// Note, returned pair holds high 64 -bits of result first and then remaining
+// low 64 -bits are kept.
+//
+// Taken from
+// https://github.com/itzmeanjan/rescue-prime/blob/faa22ec/include/ff.hpp#L15-L70
+static inline constexpr std::pair<uint64_t, uint64_t>
+full_mul_u64(const uint64_t lhs, const uint64_t rhs)
 {
-  const u72::u72 u = u72::from_bytes(bytes);
-  uint32_t z0 = 0;
+#if defined __aarch64__ && __SIZEOF_INT128__ == 16
+  // Benchmark results show that only on aarch64 CPU, if __int128 is supported
+  // by the compiler, it outperforms `else` code block, where manually high and
+  // low 64 -bit limbs are computed.
 
-  for (size_t i = 0; i < 19; i++) {
-    u72::u72 v = u72::from_decimal(RCDT[i], RCDT_LEN[i]);
+  using uint128_t = unsigned __int128;
 
-    z0 += (u72::cmp(u, v) == -1); // u < v ? 1 : 0
-  }
+  const auto a = static_cast<uint128_t>(lhs);
+  const auto b = static_cast<uint128_t>(rhs);
+  const auto c = a * b;
 
-  return z0;
+  return std::make_pair(static_cast<uint64_t>(c >> 64),
+                        static_cast<uint64_t>(c));
+
+#else
+  // On x86_64 targets, following code block always performs better than above
+  // code block - as per benchmark results.
+
+  const uint64_t lhs_hi = lhs >> 32;
+  const uint64_t lhs_lo = lhs & 0xfffffffful;
+
+  const uint64_t rhs_hi = rhs >> 32;
+  const uint64_t rhs_lo = rhs & 0xfffffffful;
+
+  const uint64_t hi = lhs_hi * rhs_hi;   // high 64 -bits
+  const uint64_t mid0 = lhs_hi * rhs_lo; // mid 64 -bits ( first component )
+  const uint64_t mid1 = lhs_lo * rhs_hi; // mid 64 -bits ( second component )
+  const uint64_t lo = lhs_lo * rhs_lo;   // low 64 -bits
+
+  const uint64_t mid0_hi = mid0 >> 32;          // high 32 -bits of mid0
+  const uint64_t mid0_lo = mid0 & 0xfffffffful; // low 32 -bits of mid0
+  const uint64_t mid1_hi = mid1 >> 32;          // high 32 -bits of mid1
+  const uint64_t mid1_lo = mid1 & 0xfffffffful; // low 32 -bits of mid1
+
+  const uint64_t t0 = lo >> 32;
+  const uint64_t t1 = t0 + mid0_lo + mid1_lo;
+  const uint64_t carry = t1 >> 32;
+
+  // res = lhs * rhs | res is a 128 -bit number
+  //
+  // assert res = (res_hi << 64) | res_lo
+  const uint64_t res_hi = hi + mid0_hi + mid1_hi + carry;
+  const uint64_t res_lo = lo + (mid0_lo << 32) + (mid1_lo << 32);
+
+  return std::make_pair(res_hi, res_lo);
+
+#endif
 }
 
-// Multiplies two 63 -bit unsigned integers and returns top 63 -bits of
-// 126 -bits result
-//
-// Note, underlying data type is 64 -bits wide, which is why some bit
-// manipulation required to get top 63 -bits of result !
-static inline const uint64_t
-top_63_bits(const uint64_t a, const uint64_t b)
+// Given an unsigned 126 -bit result held using two 64 -bit unsigned integers (
+// first high 62 -bits and low 64 -bits ), this routine extracts out and returns
+// top 63 -bits of result.
+static inline uint64_t
+top_63_bits(std::pair<uint64_t, uint64_t> v)
 {
-  // returns MSB 64 -bits of 128 -bits result
-  uint64_t high = sycl::mul_hi(a, b);
-  // returns LSB 64 -bits of 128 -bits result
-  uint64_t low = a * b;
-
-  // finally keep MSB 65 -bits of 128 -bits result
-  return (high << 1) | (low >> 63);
+  constexpr uint64_t mask = (1ul << 62) - 1ul;
+  return ((v.first & mask) << 1) | (v.second >> 63);
 }
 
-// Returns an integral approximation of 2 ^ 63 * ccs * exp(−x); see algorithm 13
-// in Falcon specification https://falcon-sign.info/falcon.pdf
-const uint64_t
+// Routine for computing integral approximations of
+//
+// 2^63 * ccs * e^−x | x ∈ [0, ln(2)] , ccs ∈ [0, 1]
+//
+// This is an implementation of algorithm 13, described on page 42 of Falcon
+// specification https://falcon-sign.info/falcon.pdf
+static inline uint64_t
 approx_exp(const double x, const double ccs)
 {
   uint64_t y = C[0];
-  uint64_t z = static_cast<uint64_t>(x * (1ul << 63));
+  uint64_t z = static_cast<uint64_t>(std::floor(9223372036854775808. * x));
 
-  for (size_t i = 1; i < 13; i++) {
-    y = C[i] - top_63_bits(y, z);
+  for (size_t u = 1; u < 13; u++) {
+    const auto t0 = full_mul_u64(z, y);
+    const auto t1 = top_63_bits(t0);
+    y = C[u] - t1;
   }
 
-  z = static_cast<uint64_t>(ccs * (1ul << 63)) << 1;
-  return top_63_bits(y, z);
+  z = static_cast<uint64_t>(std::floor(9223372036854775808. * ccs));
+  const auto t0 = full_mul_u64(z, y);
+  y = top_63_bits(t0);
+
+  return y;
 }
 
-// Returns a single bit = 1, with probability ≈ ccs * exp(−x)
+// Computes a single bit ( = 1 ) with probability ≈ ccs * e^−x | ccs, x >= 0
 //
-// See algorithm 14 in Falcon specification https://falcon-sign.info/falcon.pdf
-const bool
-ber_exp(const double x,
-        const double ccs,
-        oneapi::dpl::minstd_rand eng,
-        oneapi::dpl::uniform_int_distribution<uint8_t> dis)
+// This is an implementation of algorithm 14, described on page 43 of Falcon
+// specification https://falcon-sign.info/falcon.pdf
+static inline uint8_t
+ber_exp(const double x, const double ccs)
 {
-  uint64_t s = static_cast<uint64_t>(x * ILN2);
-  s = sycl::min(63ul, s);
+  const double s = std::floor(x * INV_LN2);
+  const double r = x - s * LN2;
+  const uint64_t s_ = std::min<uint64_t>(static_cast<uint64_t>(s), 63ul);
+  const uint64_t z = (2 * approx_exp(r, ccs) - 1) >> s_;
 
-  double r = x - static_cast<double>(s) * LN2;
+  std::random_device rd;
+  std::mt19937_64 gen(rd());
+  std::uniform_int_distribution<uint8_t> dis{};
 
-  uint64_t z = (approx_exp(r, ccs) - 1) >> s;
-  int64_t w = 0;
+  int32_t w = 0;
+  int64_t i = 64l;
+  do {
+    i = i - 8l;
 
-  for (int64_t i = 56; w == 0 && i > -8; i -= 8) {
-    uint8_t b = dis(eng);
-    w = b - ((z >> i) & 0xff);
-  }
+    const uint8_t t0 = dis(gen);
+    w = static_cast<int32_t>(t0) - static_cast<int32_t>((z >> i) & 0xfful);
+  } while ((w == 0) && (i > 0l));
 
   return w < 0;
 }
 
-// Note, this implementation is strictly for testing correctness of samplerz
-// implementation; random bytes are pre-generated, taken from Falcon
-// specification's table 3.2
+// Computes a single bit ( = 1 ) with probability ≈ ccs * e^−x | ccs, x >= 0
 //
-// Returns a single bit = 1, with probability ≈ ccs * exp(−x)
+// This is an implementation of algorithm 14, described on page 43 of Falcon
+// specification https://falcon-sign.info/falcon.pdf
 //
-// See algorithm 14 in Falcon specification https://falcon-sign.info/falcon.pdf
-const bool
+// Note, there's another function with almost similar signature, but that one
+// doesn't take any random bytes array, rather samples randomness itself.
+// Whereas this routine expects you to also pass pointer to some memory location
+// where consecutive memory addresses hold `rblen` -many random sampled bytes.
+// This routine takes randomness from that array and also return how many random
+// bytes it had to use to finish executing the body of the do-while loop, so
+// that next user of random bytes can just skip forward those many bytes.
+static inline std::pair<uint8_t, size_t>
 ber_exp(const double x,
         const double ccs,
-        const uint8_t* const __restrict bytes,
-        size_t* const __restrict used_bytes)
+        const uint8_t* const rbytes,
+        const size_t rblen)
 {
-  uint64_t s = static_cast<uint64_t>(x * ILN2);
-  s = sycl::min(63ul, s);
+  const double s = std::floor(x * INV_LN2);
+  const double r = x - s * LN2;
+  const uint64_t s_ = std::min<uint64_t>(static_cast<uint64_t>(s), 63ul);
+  const uint64_t z = (2 * approx_exp(r, ccs) - 1) >> s_;
 
-  double r = x - static_cast<double>(s) * LN2;
+  size_t ridx = 0;
+  int32_t w = 0;
+  int64_t i = 64l;
 
-  uint64_t z = (approx_exp(r, ccs) - 1) >> s;
-  int64_t w = 0;
+  do {
+    i = i - 8l;
 
-  size_t b_idx = 0;
-  for (int64_t i = 56; w == 0 && i > -8; i -= 8) {
-    w = bytes[b_idx++] - ((z >> i) & 0xff);
-  }
+    const uint8_t t0 = rbytes[ridx++];
+    w = static_cast<int32_t>(t0) - static_cast<int32_t>((z >> i) & 0xfful);
+  } while ((w == 0) && (i > 0l) && (ridx < rblen));
 
-  // these many bytes were consumed; read last line of page 43 of Falcon
-  // specification https://falcon-sign.info/falcon.pdf; you'll understand why
-  // it's necessary to keep track of it that how many bytes were used
-  *used_bytes = b_idx;
-
-  return w < 0;
+  return std::make_pair(w < 0, ridx);
 }
 
-// Sampling an integer z ∈ Z from a distribution very close to D{Z, μ, σ′}
-//
-// See algorithm 15 in Falcon specification https://falcon-sign.info/falcon.pdf
-const int32_t
-samplerz(const double mu,
-         const double sigma,
-         const double sigmin,
-         oneapi::dpl::minstd_rand eng,
-         oneapi::dpl::uniform_int_distribution<uint8_t> dis)
+// Given floating point arguments μ, σ' | σ' ∈ [σ_min, σ_max], integer z ∈ Z,
+// sampled from a distribution very close to D_{Z, μ, σ′}, following algorithm
+// 15 of Falcon specification https://falcon-sign.info/falcon.pdf
+static inline int32_t
+samplerz(const double μ, const double σ_prime, const double σ_min)
 {
-  const int32_t s = static_cast<int32_t>(sycl::floor(mu));
-  const double r = mu - static_cast<double>(s);
-  const double dss = 1. / (2. * sigma * sigma);
-  const double ccs = sigmin / sigma;
-  const uint8_t one = 0b1;
+  const double r = μ - std::floor(μ);
+  const double ccs = σ_min / σ_prime;
+
+  const double t0 = 1. / (2. * σ_prime * σ_prime);
+  constexpr double t1 = 1. / (2. * σ_max * σ_max);
+
+  std::random_device rd;
+  std::mt19937_64 gen(rd());
+  std::uniform_int_distribution<uint8_t> dis{};
 
   while (true) {
-    const uint32_t z0 = base_sampler(eng, dis);
+    const auto z0 = static_cast<int32_t>(base_sampler());
+    const auto b = dis(gen) & 0b1;
+    const auto z = static_cast<double>(b + (2 * b - 1) * z0);
 
-    uint8_t b = dis(eng);
-    b &= one; // keep only last bit
+    const auto t2 = z - r;
+    const auto t3 = t2 * t2;
+    const auto t4 = t3 * t0;
 
-    const int32_t z = (uint32_t)b + (((uint32_t)b << 1) - 1) * z0;
+    const auto t5 = static_cast<double>(z0 * z0);
+    const auto t6 = t5 * t1;
 
-    const double zr = ((double)z - r);
-    const double x = (zr * zr) * dss - ((double)(z0 * z0)) * INV_SIGMA2;
-
-    if (ber_exp(x, ccs, eng, dis)) {
-      return z + s;
+    const auto x = t4 - t6;
+    const auto t7 = ber_exp(x, ccs);
+    if (t7 == 1) {
+      return static_cast<int32_t>(z + std::floor(μ));
     }
   }
 }
 
-// Note, this implementation is strictly for testing correctness of samplerz
-// implementation; random bytes are pre-generated, taken from Falcon
-// specification's table 3.2
+// Given floating point arguments μ, σ' | σ' ∈ [σ_min, σ_max], integer z ∈ Z,
+// sampled from a distribution very close to D_{Z, μ, σ′}, following algorithm
+// 15 of Falcon specification https://falcon-sign.info/falcon.pdf
 //
-// Sampling an integer z ∈ Z from a distribution very close to D{Z, μ, σ′}
-//
-// See algorithm 15 in Falcon specification https://falcon-sign.info/falcon.pdf
-const int32_t
-samplerz(const double mu,
-         const double sigma,
-         const double sigmin,
-         uint8_t* const bytes // pre-generated random bytes
-)
+// Note, there's another function with almost similar signature, but that one
+// doesn't take any random bytes array, rather samples randomness itself.
+// Whereas this routine expects you to also pass pointer to some memory location
+// where consecutive memory addresses hold `rblen` -many random sampled bytes.
+// This routine takes randomness from that array and also return how many random
+// bytes it had to use to finish executing the body of the while loop. This
+// routine is written such that I can easily write test cases using KATs (known
+// answer tests) suppiled with Falcon's NIST submission, for easing correct
+// implementation of SamplerZ routine.
+static inline std::pair<int32_t, size_t>
+samplerz(const double μ,
+         const double σ_prime,
+         const double σ_min,
+         const uint8_t* const rbytes,
+         const size_t rblen)
 {
-  const int32_t s = static_cast<int32_t>(sycl::floor(mu));
-  const double r = mu - static_cast<double>(s);
-  const double dss = 1. / (2. * sigma * sigma);
-  const double ccs = sigmin / sigma;
+  const double r = μ - std::floor(μ);
+  const double ccs = σ_min / σ_prime;
 
-  size_t b_idx = 0;
-  while (true) {
-    const uint32_t z0 = base_sampler(bytes + b_idx);
+  const double t0 = 1. / (2. * σ_prime * σ_prime);
+  constexpr double t1 = 1. / (2. * σ_max * σ_max);
 
-    uint8_t b = bytes[b_idx + 9];
-    b &= static_cast<uint8_t>(0b1); // keep only last bit
+  size_t ridx = 0;
+  int32_t ret_z = 0;
 
-    const int32_t z = (uint32_t)b + (((uint32_t)b << 1) - 1) * z0;
+  while (ridx < rblen) {
+    std::array<uint8_t, 9> tmp{};
+    std::memcpy(tmp.data(), rbytes + ridx, 9);
+    std::reverse(tmp.begin(), tmp.end());
+    ridx += 9;
 
-    const double zr = ((double)z - r);
-    const double x = (zr * zr) * dss - ((double)(z0 * z0)) * INV_SIGMA2;
+    const auto z0 = static_cast<int32_t>(base_sampler<false>(std::move(tmp)));
+    const auto b = rbytes[ridx++] & 0b1;
+    const auto z = static_cast<double>(b + (2 * b - 1) * z0);
 
-    size_t used_bytes = 0;
-    if (ber_exp(x, ccs, bytes + b_idx + 10, &used_bytes)) {
-      return z + s;
+    const auto t2 = z - r;
+    const auto t3 = t2 * t2;
+    const auto t4 = t3 * t0;
+
+    const auto t5 = static_cast<double>(z0 * z0);
+    const auto t6 = t5 * t1;
+
+    const auto x = t4 - t6;
+    const auto [t7, ulen] = ber_exp(x, ccs, rbytes + ridx, rblen - ridx);
+    ridx += ulen;
+    if (t7 == 1) {
+      ret_z = static_cast<int32_t>(z + std::floor(μ));
+      break;
     }
-
-    b_idx += (10 + used_bytes);
   }
+
+  return std::make_pair(ret_z, ridx);
 }
 
 }
