@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <random>
 #include <sstream>
+#include <string_view>
 #include <type_traits>
 
 // Fill memory allocation with `len` -many random elements of unsigned integral
@@ -39,6 +40,25 @@ to_hex(const uint8_t* const bytes, const size_t len)
     ss << std::setw(2) << std::setfill('0') << static_cast<uint32_t>(bytes[i]);
   }
   return ss.str();
+}
+
+// Given a hex encoded string, this routine computes a byte array of length
+// `hex_string.length() / 2` -bytes; see https://stackoverflow.com/a/30606613
+inline void
+to_byte_array(const std::string& hex_string, uint8_t* const __restrict bytes)
+{
+  const size_t slen = hex_string.length();
+  const size_t blen = slen / 2;
+
+  for (size_t i = 0; i < blen; i++) {
+    const size_t off = i * 2;
+
+    const auto t0 = hex_string.substr(off, 2);
+    const auto t1 = std::strtol(t0.c_str(), nullptr, 16);
+    const auto t2 = static_cast<uint8_t>(t1);
+
+    bytes[i] = t2;
+  }
 }
 
 // Computes binary logarithm of `n`, when n is power of 2
