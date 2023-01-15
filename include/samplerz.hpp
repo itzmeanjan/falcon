@@ -16,6 +16,15 @@ constexpr double LN2 = 0.6931471805599453;
 // = 1/ math.log(2)
 constexpr double INV_LN2 = 1. / LN2;
 
+// See table 3.3 of Falcon specification https://falcon-sign.info/falcon.pdf
+constexpr double FALCON512_σ_min = 1.277833697;
+
+// See table 3.3 of Falcon specification https://falcon-sign.info/falcon.pdf
+constexpr double FALCON1024_σ_min = 1.298280334;
+
+// See table 3.3 of Falcon specification https://falcon-sign.info/falcon.pdf
+constexpr double σ_max = 1.8205;
+
 // Scaled ( by a factor 2^72 ) Probability Distribution Table, taken from
 // table 3.1 of ( on page 41 ) of Falcon specification
 // https://falcon-sign.info/falcon.pdf
@@ -286,16 +295,13 @@ ber_exp(const double x,
 // sampled from a distribution very close to D_{Z, μ, σ′}, following algorithm
 // 15 of Falcon specification https://falcon-sign.info/falcon.pdf
 static inline int32_t
-samplerz(const double μ,
-         const double σ_prime,
-         const double σ_min,
-         const double σ_max)
+samplerz(const double μ, const double σ_prime, const double σ_min)
 {
   const double r = μ - std::floor(μ);
   const double ccs = σ_min / σ_prime;
 
   const double t0 = 1. / (2. * σ_prime * σ_prime);
-  const double t1 = 1. / (2. * σ_max * σ_max);
+  constexpr double t1 = 1. / (2. * σ_max * σ_max);
 
   std::random_device rd;
   std::mt19937_64 gen(rd());
@@ -338,7 +344,6 @@ static inline std::pair<int32_t, size_t>
 samplerz(const double μ,
          const double σ_prime,
          const double σ_min,
-         const double σ_max,
          const uint8_t* const rbytes,
          const size_t rblen)
 {
@@ -346,12 +351,15 @@ samplerz(const double μ,
   const double ccs = σ_min / σ_prime;
 
   const double t0 = 1. / (2. * σ_prime * σ_prime);
-  const double t1 = 1. / (2. * σ_max * σ_max);
+  constexpr double t1 = 1. / (2. * σ_max * σ_max);
 
   size_t ridx = 0;
+  int32_t ret_z = 0;
+
   while (ridx < rblen) {
     std::array<uint8_t, 9> tmp{};
     std::memcpy(tmp.data(), rbytes + ridx, 9);
+    std::reverse(tmp.begin(), tmp.end());
     ridx += 9;
 
     const auto z0 = base_sampler<false>(std::move(tmp));
@@ -369,9 +377,12 @@ samplerz(const double μ,
     const auto [t7, ulen] = ber_exp(x, ccs, rbytes + ridx, rblen - ridx);
     ridx += ulen;
     if (t7 == 1) {
-      return std::make_pair(static_cast<int32_t>(z + std::floor(μ)), ridx);
+      ret_z = static_cast<int32_t>(z + std::floor(μ));
+      break;
     }
   }
+
+  return std::make_pair(ret_z, ridx);
 }
 
 }
