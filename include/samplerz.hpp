@@ -308,7 +308,7 @@ samplerz(const double μ, const double σ_prime, const double σ_min)
   std::uniform_int_distribution<uint8_t> dis{};
 
   while (true) {
-    const auto z0 = base_sampler();
+    const auto z0 = static_cast<int32_t>(base_sampler());
     const auto b = dis(gen) & 0b1;
     const auto z = static_cast<double>(b + (2 * b - 1) * z0);
 
@@ -362,7 +362,7 @@ samplerz(const double μ,
     std::reverse(tmp.begin(), tmp.end());
     ridx += 9;
 
-    const auto z0 = base_sampler<false>(std::move(tmp));
+    const auto z0 = static_cast<int32_t>(base_sampler<false>(std::move(tmp)));
     const auto b = rbytes[ridx++] & 0b1;
     const auto z = static_cast<double>(b + (2 * b - 1) * z0);
 
