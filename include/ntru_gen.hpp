@@ -147,18 +147,7 @@ gram_schmidt_norm(const double* const __restrict f,
   polynomial::div<LOG2N>(f_adj, fxf_adj_gxg_adj, ft);
   polynomial::div<LOG2N>(g_adj, fxf_adj_gxg_adj, gt);
 
-  fft::ifft<LOG2N>(ft);
-  fft::ifft<LOG2N>(gt);
-
-  double ft_[N];
-  double gt_[N];
-
-  for (size_t i = 0; i < N; i++) {
-    ft_[i] = std::real(ft[i]);
-    gt_[i] = std::real(gt[i]);
-  }
-
-  const auto sq_norm_FG = qxq * (sqrd_norm<LOG2N>(ft_) + sqrd_norm<LOG2N>(gt_));
+  const auto sq_norm_FG = qxq * (sqrd_norm<LOG2N>(ft) + sqrd_norm<LOG2N>(gt));
   return std::max(sq_norm_fg, sq_norm_FG);
 }
 
