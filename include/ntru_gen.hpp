@@ -77,6 +77,25 @@ sqrd_norm(const double* const poly)
   return res;
 }
 
+// Given a polynomial of degree (n - 1) | n ∈ {512, 1024}, in its FFT
+// representation, this routine computes squared norm using formula 3.8, as
+// described on top of page 24 of the Falcon specification
+// https://falcon-sign.info/falcon.pdf
+template<const size_t LOG2N>
+static inline double
+sqrd_norm(const fft::cmplx* const poly)
+{
+  constexpr size_t N = 1ul << LOG2N;
+  constexpr double N_ = static_cast<double>(N);
+  fft::cmplx res{};
+
+  for (size_t i = 0; i < N; i++) {
+    res += poly[i] * std::conj(poly[i]);
+  }
+
+  return std::real(res) / N_;
+}
+
 // Computes squared Gram-Schmidt norm of NTRU matrix generated using random
 // sampled polynomials f, g of degree (N - 1) | N = 2^LOG2N
 //
