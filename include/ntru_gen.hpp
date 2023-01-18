@@ -13,11 +13,10 @@ namespace ntru_gen {
 // specification https://falcon-sign.info/falcon.pdf
 template<const size_t n>
 static inline void
-gen_poly(ff::ff_t* const poly)
+gen_poly(int32_t* const poly)
 {
   constexpr double σ = 1.43300980528773;
   constexpr size_t k = 4096 / n;
-  constexpr int32_t q = ff::Q;
 
   for (size_t i = 0; i < n; i++) {
 
@@ -30,8 +29,7 @@ gen_poly(ff::ff_t* const poly)
       }
     }
 
-    const bool flg = res < 0;
-    poly[i].v = static_cast<uint16_t>(flg * q + res);
+    poly[i] = res;
   }
 }
 
@@ -40,10 +38,15 @@ gen_poly(ff::ff_t* const poly)
 // ensuring none of the coefficients, in NTT representation, are zero.
 template<const size_t n>
 static inline bool
-is_poly_invertible(const ff::ff_t* const poly)
+is_poly_invertible(const int32_t* const poly)
 {
+  constexpr int32_t q = ff::Q;
   ff::ff_t tmp[n];
-  std::memcpy(tmp, poly, n * sizeof(ff::ff_t));
+
+  for (size_t i = 0; i < n; i++) {
+    const bool flg = poly[i] < 0;
+    tmp.v = static_cast<uint16_t>(flg * q + poly[i]);
+  }
 
   if constexpr (n == 512) {
     ntt::ntt<9>(tmp);
