@@ -116,8 +116,8 @@ gram_schmidt_norm(const double* const __restrict f,
   fft::cmplx fxf_adj[N];
   fft::cmplx gxg_adj[N];
 
-  polynomial::mul(f, f_adj, fxf_adj);
-  polynomial::mul(g, g_adj, gxg_adj);
+  polynomial::mul<LOG2N>(f_, f_adj, fxf_adj);
+  polynomial::mul<LOG2N>(g_, g_adj, gxg_adj);
 
   fft::cmplx fxf_adj_gxg_adj[N];
   polynomial::add<LOG2N>(fxf_adj, gxg_adj, fxf_adj_gxg_adj);
@@ -125,8 +125,8 @@ gram_schmidt_norm(const double* const __restrict f,
   fft::cmplx ft[N];
   fft::cmplx gt[N];
 
-  polynomial::div(f_adj, fxf_adj_gxg_adj, ft);
-  polynomial::div(g_adj, fxf_adj_gxg_adj, gt);
+  polynomial::div<LOG2N>(f_adj, fxf_adj_gxg_adj, ft);
+  polynomial::div<LOG2N>(g_adj, fxf_adj_gxg_adj, gt);
 
   fft::ifft<LOG2N>(ft);
   fft::ifft<LOG2N>(gt);
