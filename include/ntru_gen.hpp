@@ -62,4 +62,21 @@ is_poly_invertible(const int32_t* const poly)
   return flg;
 }
 
+// Given a polynomial of degree (n - 1) | n ∈ {512, 1024}, in its coefficient
+// representation, this routine computes squared norm using formula 3.10, as
+// described on top of page 24 of the Falcon specification
+// https://falcon-sign.info/falcon.pdf
+template<const size_t n>
+static inline double
+sqr_norm(const double* const poly)
+{
+  double res = 0.;
+
+  for (size_t i = 0; i < n; i++) {
+    res += poly[i] * poly[i];
+  }
+
+  return res;
+}
+
 }
