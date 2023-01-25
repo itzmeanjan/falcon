@@ -1,4 +1,5 @@
 #pragma once
+#include "karatsuba.hpp"
 #include "polynomial.hpp"
 #include "samplerz.hpp"
 
@@ -149,6 +150,41 @@ gram_schmidt_norm(const double* const __restrict f,
 
   const auto sq_norm_FG = qxq * (sqrd_norm<LOG2N>(ft) + sqrd_norm<LOG2N>(gt));
   return std::max(sq_norm_fg, sq_norm_FG);
+}
+
+// Computes field norm a polynomial ( in coefficient representation ) of degree
+// N s.t. N > 1 and N = 2^i, projecting element of Q[x]/(x^n + 1) to
+// Q[x]/(x^(n/2) + 1), following section 3.6.1 of the Falcon specification ( see
+// bottom of page 30, formula 3.25 ) https://falcon-sign.info/falcon.pdf
+//
+// This implementation collects inspiration from
+// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L61-L75
+template<const size_t N>
+static inline std::array<mpz_class, N / 2>
+field_norm(const std::array<mpz_class, N>& polya)
+  requires((N > 1) && ((N & (N - 1)) == 0))
+{
+  constexpr size_t Nby2 = N / 2;
+  using nby2poly_t = std::array<mpz_class, Nby2>;
+
+  nby2poly_t polyae;
+  nby2poly_t polyao;
+
+  for (size_t i = 0; i < Nby2; i++) {
+    polyae[i] = polya[2 * i];
+    polyao[i] = polya[2 * i + 1];
+  }
+
+  const nby2poly_t polyae_sq = karatsuba::karamul(polyae, polyae);
+  const nby2poly_t polyao_sq = karatsuba::karamul(polyao, polyao);
+
+  nby2poly_t res = polyae_sq;
+  for (size_t i = 0; i < Nby2 - 1; i++) {
+    res[i + 1] = res[i + 1] - polyao_sq[i];
+  }
+  res[0] = res[0] + polyao_sq[Nby2 - 1];
+
+  return res;
 }
 
 }
