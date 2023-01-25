@@ -1,7 +1,9 @@
 #pragma once
+#include "gmpxx.h"
 #include "karatsuba.hpp"
 #include "polynomial.hpp"
 #include "samplerz.hpp"
+#include <array>
 
 // Generate f, g, F, G ∈ Z[x]/(φ) | fG − gF = q mod φ ( i.e. NTRU equation )
 namespace ntru_gen {
@@ -185,6 +187,42 @@ field_norm(const std::array<mpz_class, N>& polya)
   res[0] = res[0] + polyao_sq[Nby2 - 1];
 
   return res;
+}
+
+// Uses extended GCD algorithm over Z, given x, y ∈ Z, computing a, b, g ∈ Z
+// s.t. ax + by = g
+//
+// Adapts
+// https://github.com/itzmeanjan/kyber/blob/3cd41a5/include/ff.hpp#L49-L82 for
+// multi-precision integers
+static inline std::array<mpz_class, 3>
+xgcd(const mpz_class& x, const mpz_class& y)
+{
+  mpz_class old_r{ x }, r{ y };
+  mpz_class old_s{ 1 }, s{ 0 };
+  mpz_class old_t{ 0 }, t{ 1 };
+
+  while (r != mpz_class{ 0 }) {
+    mpz_class quotient = old_r / r;
+
+    mpz_class tmp{ old_r };
+    old_r = r;
+    r = tmp - mpz_class(quotient * r);
+
+    tmp = old_s;
+    old_s = s;
+    s = tmp - mpz_class(quotient * s);
+
+    tmp = old_t;
+    old_t = t;
+    t = tmp - mpz_class(quotient * t);
+  }
+
+  return {
+    old_s, // a
+    old_t, // b
+    old_r  // g
+  };       // s.t. ax + by = g
 }
 
 }

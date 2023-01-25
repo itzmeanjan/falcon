@@ -28,9 +28,6 @@ constexpr uint16_t R = 21843;
 // Taken from
 // https://github.com/itzmeanjan/kyber/blob/3cd41a5/include/ff.hpp#L49-L82
 // Extended GCD algorithm for computing inverse of prime ( = Q ) field element
-//
-// Taken from
-// https://github.com/itzmeanjan/falcon/blob/45b0593215c3f2ec550860128299b123885b3a42/include/ff.hpp#L40-L67
 static inline constexpr std::array<int16_t, 3>
 xgcd(const uint16_t x, const uint16_t y)
 {
