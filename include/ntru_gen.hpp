@@ -1,5 +1,4 @@
 #pragma once
-#include "gmpxx.h"
 #include "karatsuba.hpp"
 #include "polynomial.hpp"
 #include "samplerz.hpp"
@@ -262,6 +261,29 @@ galois_conjugate(const std::array<mpz_class, N>& poly)
   }
 
   return res;
+}
+
+// Approximates bit length of value ∈ Z, with out considering sign bit. Note,
+// this function doesn't precisely compute bit length of v, rather it rounds bit
+// length to next multiple of 8.
+//
+// Adapted from
+// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L90-L101
+static inline size_t
+approx_bit_len(const mpz_class& v)
+{
+  const mpz_class zero{ 0 };
+
+  mpz_class v_;
+  mpz_abs(v_.get_mpz_t(), v.get_mpz_t());
+
+  size_t len = 0;
+  while (v_ > zero) {
+    len += 8;
+    v_ = v_ >> 8;
+  }
+
+  return len;
 }
 
 }
