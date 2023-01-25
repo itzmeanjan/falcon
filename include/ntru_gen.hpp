@@ -245,4 +245,23 @@ lift(const std::array<mpz_class, N>& poly)
   return res;
 }
 
+// Galois conjugate of a polynomial f ∈ Z[x]/(x^n +1), is simply computed by
+// computing f(-x), following
+// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L52-L58
+//
+// This function is required for second term of line {11, 12} of algorithm 6, in
+// Falcon specification https://falcon-sign.info/falcon.pdf
+template<const size_t N>
+static inline std::array<mpz_class, N>
+galois_conjugate(const std::array<mpz_class, N>& poly)
+  requires((N >= 1) && (N & (N - 1)) == 0)
+{
+  std::array<mpz_class, N> res;
+  for (size_t i = 0; i < N; i++) {
+    res[i] = mpz_class{ 1 + (-2) * (i & 1ul) } * poly[i];
+  }
+
+  return res;
+}
+
 }
