@@ -163,28 +163,28 @@ gram_schmidt_norm(const double* const __restrict f,
 // https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L61-L75
 template<const size_t N>
 static inline std::array<mpz_class, N / 2>
-field_norm(const std::array<mpz_class, N>& polya)
+field_norm(const std::array<mpz_class, N>& poly)
   requires((N > 1) && ((N & (N - 1)) == 0))
 {
   constexpr size_t Nby2 = N / 2;
   using nby2poly_t = std::array<mpz_class, Nby2>;
 
-  nby2poly_t polyae;
-  nby2poly_t polyao;
+  nby2poly_t polye;
+  nby2poly_t polyo;
 
   for (size_t i = 0; i < Nby2; i++) {
-    polyae[i] = polya[2 * i];
-    polyao[i] = polya[2 * i + 1];
+    polye[i] = poly[2 * i];
+    polyo[i] = poly[2 * i + 1];
   }
 
-  const nby2poly_t polyae_sq = karatsuba::karamul(polyae, polyae);
-  const nby2poly_t polyao_sq = karatsuba::karamul(polyao, polyao);
+  const nby2poly_t polye_sq = karatsuba::karamul(polye, polye);
+  const nby2poly_t polyo_sq = karatsuba::karamul(polyo, polyo);
 
-  nby2poly_t res = polyae_sq;
+  nby2poly_t res = polye_sq;
   for (size_t i = 0; i < Nby2 - 1; i++) {
-    res[i + 1] = res[i + 1] - polyao_sq[i];
+    res[i + 1] = res[i + 1] - polyo_sq[i];
   }
-  res[0] = res[0] + polyao_sq[Nby2 - 1];
+  res[0] = res[0] + polyo_sq[Nby2 - 1];
 
   return res;
 }
@@ -223,6 +223,26 @@ xgcd(const mpz_class& x, const mpz_class& y)
     old_t, // b
     old_r  // g
   };       // s.t. ax + by = g
+}
+
+// Lifts a polynomial ∈ Z[x]/(x^(n/2) +1) to Z[x]/(x^n +1)
+//
+// See first term of line {11, 12} of algorithm 6, in Falcon specification
+// https://falcon-sign.info/falcon.pdf
+//
+// Adapts
+// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L78-L87
+template<const size_t N>
+static inline std::array<mpz_class, 2 * N>
+lift(const std::array<mpz_class, N>& poly)
+  requires((N >= 1) && (N & (N - 1)) == 0)
+{
+  std::array<mpz_class, N * 2> res{};
+  for (size_t i = 0; i < N; i++) {
+    res[2 * i] = poly[i];
+  }
+
+  return res;
 }
 
 }
