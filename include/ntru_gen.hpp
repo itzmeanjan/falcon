@@ -170,7 +170,7 @@ gram_schmidt_norm(const int32_t* const __restrict f,
 // bottom of page 30, formula 3.25 ) https://falcon-sign.info/falcon.pdf
 //
 // This implementation collects inspiration from
-// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L61-L75
+// https://github.com/tprest/falcon.py/blob/88d01ed/ntrugen.py#L61-L75
 template<const size_t N>
 static inline std::array<mpz_class, N / 2>
 field_norm(const std::array<mpz_class, N>& poly)
@@ -241,7 +241,7 @@ xgcd(const mpz_class& x, const mpz_class& y)
 // https://falcon-sign.info/falcon.pdf
 //
 // Adapts
-// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L78-L87
+// https://github.com/tprest/falcon.py/blob/88d01ed/ntrugen.py#L78-L87
 template<const size_t N>
 static inline std::array<mpz_class, 2 * N>
 lift(const std::array<mpz_class, N>& poly)
@@ -257,7 +257,7 @@ lift(const std::array<mpz_class, N>& poly)
 
 // Galois conjugate of a polynomial f ∈ Z[x]/(x^n +1), is simply computed by
 // computing f(-x), following
-// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L52-L58
+// https://github.com/tprest/falcon.py/blob/88d01ed/ntrugen.py#L52-L58
 //
 // This function is required for second term of line {11, 12} of algorithm 6, in
 // Falcon specification https://falcon-sign.info/falcon.pdf
@@ -283,7 +283,7 @@ galois_conjugate(const std::array<mpz_class, N>& poly)
 // length to next multiple of 8.
 //
 // Adapted from
-// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L90-L101
+// https://github.com/tprest/falcon.py/blob/88d01ed/ntrugen.py#L90-L101
 static inline size_t
 approx_bit_len(const mpz_class& v)
 {
@@ -327,7 +327,7 @@ min_max(const std::array<mpz_class, N>& arr)
 // using algorithm 7 of Falcon specification and returns reduced F, G.
 //
 // This implementation collects inspiration from
-// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L104-L150
+// https://github.com/tprest/falcon.py/blob/88d01ed/ntrugen.py#L104-L150
 template<const size_t N>
 static inline void
 reduce(const std::array<mpz_class, N>& f,
@@ -464,7 +464,7 @@ public:
 //
 // See algorithm 6 of Falcon specification. This implementation collects
 // inspiration from
-// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L166-L187.
+// https://github.com/tprest/falcon.py/blob/88d01ed/ntrugen.py#L166-L187.
 //
 // Before consuming two polynomials F, G, consider checking whether it's a valid
 // solution or not, using is_solution() function on returned value of type

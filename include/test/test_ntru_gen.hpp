@@ -9,7 +9,7 @@ namespace test_falcon {
 // equation ( see eq 3.15 of Falcon specification ) or not.
 //
 // This test collects some inspiration from
-// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/test.py#L80-L85,
+// https://github.com/tprest/falcon.py/blob/88d01ed/test.py#L80-L85,
 // though note that for polynomial mutliplication it doesn't use Karatsuba,
 // rather it performs polynomial arithmetic in frequency domain.
 template<const size_t N>
@@ -73,6 +73,9 @@ check_ntru_eq(const int32_t* const __restrict f,
 // Test functional correctness of NTRUGen routine, by first generating f, g, F,
 // G ∈ Z[x]/(x^N + 1) and then solving NTRU equation ( see eq 3.15 of Falcon
 // specification ).
+//
+// Collects some inspiration from
+// https://github.com/tprest/falcon.py/blob/88d01ed/test.py#L88-L94
 template<const size_t N>
 void
 test_ntru_gen()
