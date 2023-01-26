@@ -1,10 +1,7 @@
 #pragma once
-#include "gmpxx.h"
 #include "karatsuba.hpp"
 #include "polynomial.hpp"
 #include "samplerz.hpp"
-#include <array>
-#include <utility>
 
 // Generate f, g, F, G ∈ Z[x]/(φ) | fG − gF = q mod φ ( i.e. NTRU equation )
 namespace ntru_gen {
@@ -308,6 +305,131 @@ min_max(const std::array<mpz_class, N>& arr)
   }
 
   return { min, max };
+}
+
+// Given four polynomials of degree N, this routine reduces F, G w.r.t. f, g
+// using algorithm 7 of Falcon specification and returns reduced F, G.
+//
+// This implementation collects inspiration from
+// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L104-L150
+template<const size_t N>
+static inline std::pair<std::array<mpz_class, N>, std::array<mpz_class, N>>
+reduce(const std::array<mpz_class, N>& f,
+       const std::array<mpz_class, N>& g,
+       std::array<mpz_class, N>& F,
+       std::array<mpz_class, N>& G)
+  requires((N > 1) && (N & (N - 1)) == 0)
+{
+  const std::pair<mpz_class, mpz_class> fmm = min_max(f);
+  const std::pair<mpz_class, mpz_class> gmm = min_max(g);
+
+  const size_t blen0 = std::max(
+    53ul,
+    std::max(std::max(approx_bit_len(fmm.first), approx_bit_len(fmm.second)),
+             std::max(approx_bit_len(gmm.first), approx_bit_len(gmm.second))));
+
+  fft::cmplx f_adjust[N];
+  fft::cmplx g_adjust[N];
+  fft::cmplx f_adjoint[N];
+  fft::cmplx g_adjoint[N];
+
+  for (size_t i = 0; i < N; i++) {
+    f_adjust[i] = fft::cmplx{ mpz_class(f[i] >> (blen0 - 53ul)).get_d() };
+    g_adjust[i] = fft::cmplx{ mpz_class(g[i] >> (blen0 - 53ul)).get_d() };
+  }
+
+  fft::fft<log2<N>()>(f_adjust);
+  fft::fft<log2<N>()>(g_adjust);
+
+  std::memcpy(f_adjoint, f_adjust, sizeof(f_adjust));
+  std::memcpy(g_adjoint, g_adjust, sizeof(g_adjust));
+
+  fft::adj_poly<log2<N>()>(f_adjoint);
+  fft::adj_poly<log2<N>()>(g_adjoint);
+
+  while (1) {
+    const std::pair<mpz_class, mpz_class> Fmm = min_max(F);
+    const std::pair<mpz_class, mpz_class> Gmm = min_max(G);
+
+    const size_t blen1 = std::max(
+      53ul,
+      std::max(
+        std::max(approx_bit_len(Fmm.first), approx_bit_len(Fmm.second)),
+        std::max(approx_bit_len(Gmm.first), approx_bit_len(Gmm.second))));
+
+    if (blen1 < blen0) {
+      break;
+    }
+
+    fft::cmplx F_adjust[N];
+    fft::cmplx G_adjust[N];
+    fft::cmplx F_adjoint[N];
+    fft::cmplx G_adjoint[N];
+
+    for (size_t i = 0; i < N; i++) {
+      F_adjust[i] = fft::cmplx{ mpz_class(F[i] >> (blen1 - 53ul)).get_d() };
+      G_adjust[i] = fft::cmplx{ mpz_class(G[i] >> (blen1 - 53ul)).get_d() };
+    }
+
+    fft::fft<log2<N>()>(F_adjust);
+    fft::fft<log2<N>()>(G_adjust);
+
+    std::memcpy(F_adjoint, F_adjust, sizeof(F_adjust));
+    std::memcpy(G_adjoint, G_adjust, sizeof(G_adjust));
+
+    fft::adj_poly<log2<N>()>(F_adjoint);
+    fft::adj_poly<log2<N>()>(G_adjoint);
+
+    fft::cmplx ff_mul[N];
+    fft::cmplx gg_mul[N];
+    fft::cmplx Ff_mul[N];
+    fft::cmplx Gg_mul[N];
+
+    polynomial::mul<log2<N>()>(f_adjust, f_adjoint, ff_mul);
+    polynomial::mul<log2<N>()>(g_adjust, g_adjoint, gg_mul);
+    polynomial::mul<log2<N>()>(F_adjust, f_adjoint, Ff_mul);
+    polynomial::mul<log2<N>()>(G_adjust, g_adjoint, Gg_mul);
+
+    fft::cmplx ffgg_add[N];
+    fft::cmplx FfGg_add[N];
+
+    polynomial::add<log2<N>()>(ff_mul, gg_mul, ffgg_add);
+    polynomial::add<log2<N>()>(Ff_mul, Gg_mul, FfGg_add);
+
+    fft::cmplx k[N];
+
+    polynomial::div<log2<N>()>(FfGg_add, ffgg_add, k);
+    fft::ifft<log2<N>()>(k);
+
+    int64_t k_rounded[N];
+    for (size_t i = 0; i < N; i++) {
+      k_rounded[i] = static_cast<int64_t>(std::round(k[i].real()));
+    }
+
+    bool atleast_one_nonzero = false;
+    for (size_t i = 0; i < N; i++) {
+      atleast_one_nonzero |= k_rounded[i] != 0;
+    }
+
+    if (!atleast_one_nonzero) {
+      break;
+    }
+
+    std::array<mpz_class, N> k_mpz;
+    for (size_t i = 0; i < N; i++) {
+      k_mpz[i] = mpz_class(k_rounded[i]);
+    }
+
+    const std::array<mpz_class, N> fk = karatsuba::karamul(f, k_mpz);
+    const std::array<mpz_class, N> gk = karatsuba::karamul(g, k_mpz);
+
+    for (size_t i = 0; i < N; i++) {
+      F[i] = F[i] - mpz_class(fk[i] << (blen1 - blen0));
+      G[i] = G[i] - mpz_class(gk[i] << (blen1 - blen0));
+    }
+  }
+
+  return { F, G };
 }
 
 }
