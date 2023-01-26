@@ -256,7 +256,11 @@ galois_conjugate(const std::array<mpz_class, N>& poly)
 {
   std::array<mpz_class, N> res;
   for (size_t i = 0; i < N; i++) {
-    res[i] = mpz_class{ 1 + (-2) * (i & 1ul) } * poly[i];
+    if (i & 1) {
+      res[i] = -poly[i];
+    } else {
+      res[i] = poly[i];
+    }
   }
 
   return res;
@@ -401,9 +405,9 @@ reduce(const std::array<mpz_class, N>& f,
     polynomial::div<log2<N>()>(FfGg_add, ffgg_add, k);
     fft::ifft<log2<N>()>(k);
 
-    int64_t k_rounded[N];
+    signed long k_rounded[N];
     for (size_t i = 0; i < N; i++) {
-      k_rounded[i] = static_cast<int64_t>(std::round(k[i].real()));
+      k_rounded[i] = static_cast<signed long>(std::round(k[i].real()));
     }
 
     bool atleast_one_nonzero = false;
@@ -427,6 +431,63 @@ reduce(const std::array<mpz_class, N>& f,
       F[i] = F[i] - mpz_class(fk[i] << (blen1 - blen0));
       G[i] = G[i] - mpz_class(gk[i] << (blen1 - blen0));
     }
+  }
+}
+
+// Ad-hoc wrapper type for denoting that it's time to abort execution of NTRU
+// solve algorithm
+struct ntru_solve_status_t
+{
+private:
+  uint32_t failed = 0u;
+
+public:
+  inline ntru_solve_status_t(uint32_t f = 0u) { failed = f; }
+  inline bool is_solution() const { return failed == 0u; }
+};
+
+// Given two degree N polynomials f, g ∈ Z[x]/(x^N + 1), this routine attempts
+// to solve NTRU equation ( see eq 3.15 of Falcon specification ), computing F,
+// G ∈ Z[x]/(x^N + 1), which satisfies NTRU equation.
+//
+// See algorithm 6 of Falcon specification. This implementation collects
+// inspiration from
+// https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L166-L187.
+//
+// Before consuming two polynomials F, G, consider checking whether it's a valid
+// solution or not, using is_solution() function on returned value of type
+// ntru_solve_status_t.
+template<const size_t N>
+static inline std::pair<
+  std::pair<std::array<mpz_class, N>, std::array<mpz_class, N>>,
+  ntru_solve_status_t>
+ntru_solve(const std::array<mpz_class, N>& f, const std::array<mpz_class, N>& g)
+  requires((N >= 1) && (N & (N - 1)) == 0)
+{
+  if constexpr (N == 1) {
+    const auto ret = xgcd(f[0], g[0]);
+    if (ret[2] != mpz_class{ 1 }) {
+      return { {}, ntru_solve_status_t{ 1u } };
+    } else {
+      constexpr int32_t q = ff::Q;
+      return { { { mpz_class(-q * ret[1]) }, { mpz_class(q * ret[0]) } },
+               ntru_solve_status_t{} };
+    }
+  } else {
+    const auto fprime = field_norm(f);
+    const auto gprime = field_norm(g);
+
+    const auto ret = ntru_solve(fprime, gprime);
+
+    if (!ret.second.is_solution()) {
+      return { {}, ret.second };
+    }
+
+    auto F = karatsuba::karamul(lift(ret.first.first), galois_conjugate(g));
+    auto G = karatsuba::karamul(lift(ret.first.second), galois_conjugate(f));
+
+    reduce(f, g, F, G);
+    return { { F, G }, ntru_solve_status_t{} };
   }
 }
 
