@@ -313,7 +313,7 @@ min_max(const std::array<mpz_class, N>& arr)
 // This implementation collects inspiration from
 // https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/ntrugen.py#L104-L150
 template<const size_t N>
-static inline std::pair<std::array<mpz_class, N>, std::array<mpz_class, N>>
+static inline void
 reduce(const std::array<mpz_class, N>& f,
        const std::array<mpz_class, N>& g,
        std::array<mpz_class, N>& F,
@@ -428,8 +428,6 @@ reduce(const std::array<mpz_class, N>& f,
       G[i] = G[i] - mpz_class(gk[i] << (blen1 - blen0));
     }
   }
-
-  return { F, G };
 }
 
 }
