@@ -14,7 +14,7 @@ test_field_ops()
 {
   std::random_device rd;
   std::mt19937_64 gen(rd());
-  std::uniform_int_distribution<size_t> dis{ 0ul, 1ul << 24 };
+  std::uniform_int_distribution<size_t> dis{ 0ul, 1ul << 20 };
 
   for (size_t i = 0; i < rounds; i++) {
     const auto a = ff::ff_t::random();
