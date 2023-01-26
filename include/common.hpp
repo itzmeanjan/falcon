@@ -61,16 +61,11 @@ to_byte_array(const std::string& hex_string, uint8_t* const __restrict bytes)
   }
 }
 
-// Computes binary logarithm of `n`, when n is power of 2
-inline size_t
-bin_log(size_t n)
+// Compile-time compute binary logarithm of N s.t. N is power of 2 and N >= 1
+template<const size_t N>
+static inline constexpr size_t
+log2()
+  requires((N >= 1) && (N & (N - 1)) == 0)
 {
-  size_t cnt = 0ul;
-
-  while (n > 1ul) {
-    cnt++;
-    n >>= 1;
-  }
-
-  return cnt;
+  return std::bit_width(N) - 1;
 }

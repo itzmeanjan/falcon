@@ -6,6 +6,36 @@
 // complex number field C
 namespace polynomial {
 
+// Add two degree-{(1 << lg2n) - 1} polynomials in their FFT form, by
+// performing element-wise addition over C
+template<const size_t lg2n>
+inline void
+add(const fft::cmplx* const __restrict polya,
+    const fft::cmplx* const __restrict polyb,
+    fft::cmplx* const __restrict polyc)
+{
+  constexpr size_t n = 1ul << lg2n;
+
+  for (size_t i = 0; i < n; i++) {
+    polyc[i] = polya[i] + polyb[i];
+  }
+}
+
+// Subtracts one degree-{(1 << lg2n) - 1} polynomial from another one, when both
+// them are in their FFT form, by performing element-wise subtraction over C
+template<const size_t lg2n>
+inline void
+sub(const fft::cmplx* const __restrict polya,
+    const fft::cmplx* const __restrict polyb,
+    fft::cmplx* const __restrict polyc)
+{
+  constexpr size_t n = 1ul << lg2n;
+
+  for (size_t i = 0; i < n; i++) {
+    polyc[i] = polya[i] - polyb[i];
+  }
+}
+
 // Multiply two degree-{(1 << lg2n) - 1} polynomials in their FFT form, by
 // performing element-wise multiplication over C
 template<const size_t lg2n>

@@ -26,30 +26,41 @@ test_ntt()
   auto* ntt_c = static_cast<ff::ff_t*>(std::malloc(n * sizeof(ff::ff_t)));
   auto* ntt_d = static_cast<ff::ff_t*>(std::malloc(n * sizeof(ff::ff_t)));
 
-  std::random_device rd;
-  std::mt19937_64 gen(rd());
-  std::uniform_int_distribution<uint16_t> dis{ 1, ff::Q - 1 };
-
-  for (size_t i = 0; i < n; i++) {
-    poly_a[i] = ff::ff_t{ dis(gen) };
-    poly_b[i] = ff::ff_t{ dis(gen) };
-  }
-
-  std::memcpy(ntt_a, poly_a, n * sizeof(ff::ff_t));
-  std::memcpy(ntt_b, poly_b, n * sizeof(ff::ff_t));
-
-  ntt::ntt<lgn>(ntt_a);
-  ntt::ntt<lgn>(ntt_b);
-
-  polynomial::mul<lgn>(ntt_a, ntt_b, ntt_c); // c = a * b
-  polynomial::div<lgn>(ntt_c, ntt_b, ntt_d); // d = c / b
-
-  std::memcpy(poly_d, ntt_d, n * sizeof(ff::ff_t));
-  ntt::intt<lgn>(poly_d);
-
   bool flg = false;
-  for (size_t i = 0; i < n; i++) {
-    flg |= static_cast<bool>(poly_d[i].v ^ poly_a[i].v);
+
+  while (1) {
+    for (size_t i = 0; i < n; i++) {
+      poly_a[i] = ff::ff_t::random();
+      poly_b[i] = ff::ff_t::random();
+    }
+
+    std::memcpy(ntt_a, poly_a, n * sizeof(ff::ff_t));
+    std::memcpy(ntt_b, poly_b, n * sizeof(ff::ff_t));
+
+    ntt::ntt<lgn>(ntt_a);
+    ntt::ntt<lgn>(ntt_b);
+
+    bool can_invert = true;
+    for (size_t i = 0; i < n; i++) {
+      can_invert &= ntt_b[i].v != 0;
+    }
+
+    if (!can_invert) {
+      continue;
+    }
+
+    polynomial::mul<lgn>(ntt_a, ntt_b, ntt_c); // c = a * b
+    polynomial::div<lgn>(ntt_c, ntt_b, ntt_d); // d = c / b
+
+    std::memcpy(poly_d, ntt_d, n * sizeof(ff::ff_t));
+    ntt::intt<lgn>(poly_d);
+
+    flg = false; // just to be safe
+    for (size_t i = 0; i < n; i++) {
+      flg |= static_cast<bool>(poly_d[i].v ^ poly_a[i].v);
+    }
+
+    break;
   }
 
   std::free(poly_a);

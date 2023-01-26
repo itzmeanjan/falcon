@@ -173,4 +173,18 @@ merge_fft(const cmplx* const __restrict f0,
   }
 }
 
+// Given a polynomial f of degree (n - 1), in its FFT representation, this
+// routine computes Hermitian Adjoint f*, following section 3.3 ( see bottom of
+// page 23 ) of the Falcon specification https://falcon-sign.info/falcon.pdf
+template<const size_t LOG2N>
+static inline void
+adj_poly(cmplx* const poly)
+{
+  constexpr size_t N = 1ul << LOG2N;
+
+  for (size_t i = 0; i < N; i++) {
+    poly[i] = std::conj(poly[i]);
+  }
+}
+
 }

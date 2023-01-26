@@ -1,99 +1,99 @@
 #pragma once
 #include "ntru_gen.hpp"
+#include <cassert>
 
-namespace test {
+// Test functional correctness of Falcon PQC suite implementation
+namespace test_falcon {
 
-// Tests correctness of function which computes square of norm of vector, using
-// equation 3.9 of Falcon specification https://falcon-sign.info/falcon.pdf
-void
-sqnorm(sycl::queue& q, const size_t dim, const size_t wg_size)
+// Check whether computed f, g, F, G ∈ Z[x]/(x^N + 1) actually satisfy NTRU
+// equation ( see eq 3.15 of Falcon specification ) or not.
+//
+// This test collects some inspiration from
+// https://github.com/tprest/falcon.py/blob/88d01ed/test.py#L80-L85,
+// though note that for polynomial mutliplication it doesn't use Karatsuba,
+// rather it performs polynomial arithmetic in frequency domain.
+template<const size_t N>
+bool
+check_ntru_eq(const int32_t* const __restrict f,
+              const int32_t* const __restrict g,
+              const int32_t* const __restrict F,
+              const int32_t* const __restrict G)
+  requires((N == 512) || (N == 1024))
 {
-  using events = std::vector<sycl::event>;
+  auto f_ = static_cast<fft::cmplx*>(std::malloc(sizeof(fft::cmplx) * N));
+  auto g_ = static_cast<fft::cmplx*>(std::malloc(sizeof(fft::cmplx) * N));
+  auto F_ = static_cast<fft::cmplx*>(std::malloc(sizeof(fft::cmplx) * N));
+  auto G_ = static_cast<fft::cmplx*>(std::malloc(sizeof(fft::cmplx) * N));
+  auto fG = static_cast<fft::cmplx*>(std::malloc(sizeof(fft::cmplx) * N));
+  auto gF = static_cast<fft::cmplx*>(std::malloc(sizeof(fft::cmplx) * N));
+  auto fGgF = static_cast<fft::cmplx*>(std::malloc(sizeof(fft::cmplx) * N));
+  auto res = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
 
-  const size_t itmd_size = 4096 * sizeof(int32_t);
-  const size_t poly_size = dim * sizeof(double);
-  const size_t norm_size = sizeof(double);
-
-  int32_t* itmd = static_cast<int32_t*>(sycl::malloc_shared(itmd_size, q));
-  double* poly = static_cast<double*>(sycl::malloc_shared(poly_size, q));
-  double* norm = static_cast<double*>(sycl::malloc_shared(norm_size, q));
-
-  events evts0 = ntru::gen_poly(q, dim, wg_size, itmd, poly, {});
-  events evts1 = ntru::sqnorm(q, poly, dim, norm, wg_size, evts0);
-
-  q.ext_oneapi_submit_barrier(evts1).wait();
-
-  double h_norm = 0;
-  for (size_t i = 0; i < dim; i++) {
-    h_norm += (poly[i] * poly[i]);
+  for (size_t i = 0; i < N; i++) {
+    f_[i] = fft::cmplx{ static_cast<double>(f[i]) };
+    g_[i] = fft::cmplx{ static_cast<double>(g[i]) };
+    F_[i] = fft::cmplx{ static_cast<double>(F[i]) };
+    G_[i] = fft::cmplx{ static_cast<double>(G[i]) };
   }
 
-  assert(h_norm == norm[0]);
+  fft::fft<log2<N>()>(f_);
+  fft::fft<log2<N>()>(g_);
+  fft::fft<log2<N>()>(F_);
+  fft::fft<log2<N>()>(G_);
 
-  sycl::free(itmd, q);
-  sycl::free(poly, q);
-  sycl::free(norm, q);
+  polynomial::mul<log2<N>()>(f_, G_, fG);
+  polynomial::mul<log2<N>()>(g_, F_, gF);
+  polynomial::sub<log2<N>()>(fG, gF, fGgF);
+
+  fft::ifft<log2<N>()>(fGgF);
+
+  bool flg = true;
+  for (size_t i = 0; i < N; i++) {
+    res[i] = static_cast<int32_t>(std::round(fGgF[i].real()));
+
+    if (i == 0) {
+      flg &= res[i] == static_cast<int32_t>(ff::Q);
+    } else {
+      flg &= res[i] == 0;
+    }
+  }
+
+  std::free(f_);
+  std::free(g_);
+  std::free(F_);
+  std::free(G_);
+  std::free(fG);
+  std::free(gF);
+  std::free(fGgF);
+  std::free(res);
+
+  return flg;
 }
 
-// Tests correctness of function which computes squared Gram-Schmidt norm of
-// NTRU matrix generated from two polynomials `f`, `g`
+// Test functional correctness of NTRUGen routine, by first generating f, g, F,
+// G ∈ Z[x]/(x^N + 1) and then solving NTRU equation ( see eq 3.15 of Falcon
+// specification ).
 //
-// Equivalent to line 1-6 and 9-11 of algorithm 5 in Falcon specification
-// https://falcon-sign.info/falcon.pdf
-double
-gs_norm(sycl::queue& q,
-        const size_t dim,
-        const size_t wg_size,
-        size_t* const itr_cnt)
+// Collects some inspiration from
+// https://github.com/tprest/falcon.py/blob/88d01ed/test.py#L88-L94
+template<const size_t N>
+void
+test_ntru_gen()
 {
-  using events = std::vector<sycl::event>;
+  auto f = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
+  auto g = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
+  auto F = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
+  auto G = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
 
-  const size_t itmd_size = sizeof(int32_t) * 4096;
-  const size_t poly_size = sizeof(double) * dim;
-  const size_t ret_size = sizeof(double);
+  ntru_gen::ntru_gen<N>(f, g, F, G);
+  const bool flg = check_ntru_eq<N>(f, g, F, G);
 
-  int32_t* itmd_f = static_cast<int32_t*>(sycl::malloc_shared(itmd_size, q));
-  int32_t* itmd_g = static_cast<int32_t*>(sycl::malloc_shared(itmd_size, q));
-  double* poly_f = static_cast<double*>(sycl::malloc_shared(poly_size, q));
-  double* poly_g = static_cast<double*>(sycl::malloc_shared(poly_size, q));
-  double* ret = static_cast<double*>(sycl::malloc_shared(ret_size, q));
+  std::free(f);
+  std::free(g);
+  std::free(F);
+  std::free(G);
 
-  // see line 10 of algorithm 5 in Falcon specification
-  //
-  // note, that while computing polynomial norm ( see `ntru::sqnorm` ), I've not
-  // computed square root part ( following
-  // https://github.com/tprest/falcon.py/blob/88d01ede1d7fa74a8392116bc5149dee57af93f2/common.py#L39-L45
-  // ), which is why, threshold to be compared against is also kept
-  // as (1.17 * √q) ^ 2
-  const double gs_norm_threshold = (1.17 * 1.17) * (double)ff::Q;
-  size_t itr = 0;
-  double norm = 0;
-
-  // see line 9-11 of algorithm 5 in Falcon specification
-  do {
-    events evts0 = ntru::gen_poly(q, dim, wg_size, itmd_f, poly_f, {});
-    events evts1 = ntru::gen_poly(q, dim, wg_size, itmd_g, poly_g, {});
-
-    events evts2{ q.ext_oneapi_submit_barrier(evts0),
-                  q.ext_oneapi_submit_barrier(evts1) };
-
-    ntru::gs_norm(q, poly_f, dim, poly_g, dim, ret, wg_size, evts2);
-
-    norm = ret[0];
-    itr++;
-  } while (norm > gs_norm_threshold);
-
-  // these many iterations required before generating such `f`, `g` polynomials
-  // that short signatures can be produced
-  *itr_cnt = itr;
-
-  sycl::free(itmd_f, q);
-  sycl::free(itmd_g, q);
-  sycl::free(poly_f, q);
-  sycl::free(poly_g, q);
-  sycl::free(ret, q);
-
-  return norm;
+  assert(flg);
 }
 
 }

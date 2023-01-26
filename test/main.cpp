@@ -30,5 +30,9 @@ main()
   test_falcon::test_falcon1024_samplerz();
   std::cout << "[test] Sampler over the Integers, using KATs\n";
 
+  test_falcon::test_ntru_gen<512>();
+  test_falcon::test_ntru_gen<1024>();
+  std::cout << "[test] NTRUGen\n";
+
   return EXIT_SUCCESS;
 }

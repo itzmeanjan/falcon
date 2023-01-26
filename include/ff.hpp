@@ -28,9 +28,6 @@ constexpr uint16_t R = 21843;
 // Taken from
 // https://github.com/itzmeanjan/kyber/blob/3cd41a5/include/ff.hpp#L49-L82
 // Extended GCD algorithm for computing inverse of prime ( = Q ) field element
-//
-// Taken from
-// https://github.com/itzmeanjan/falcon/blob/45b0593215c3f2ec550860128299b123885b3a42/include/ff.hpp#L40-L67
 static inline constexpr std::array<int16_t, 3>
 xgcd(const uint16_t x, const uint16_t y)
 {
@@ -224,9 +221,18 @@ struct ff_t
   {
     std::random_device rd;
     std::mt19937_64 gen(rd());
-    std::uniform_int_distribution<uint16_t> dis{ 0, Q - 1 };
+    std::uniform_int_distribution<uint16_t> dis;
 
-    return ff_t{ dis(gen) };
+    ff_t res{};
+    for (size_t i = 0; i < (1ul << 10); i++) {
+      const auto v = dis(gen);
+      if (v < ff::Q) {
+        res.v = v;
+        break;
+      }
+    }
+
+    return res;
   }
 
   // Writes element of Z_q to output stream
