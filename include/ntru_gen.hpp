@@ -6,6 +6,10 @@
 // Generate f, g, F, G ∈ Z[x]/(φ) | fG − gF = q mod φ ( i.e. NTRU equation )
 namespace ntru_gen {
 
+// Squared Gram-Schmidt Norm Threshold, computed following line 10 of algorithm
+// 5 of Falcon specification https://falcon-sign.info/falcon.pdf
+constexpr double GS_NORM_THRESHOLD = 1.17 * 1.17 * static_cast<double>(ff::Q);
+
 // Generate a random polynomial of degree (n - 1) | n ∈ {512, 1024} and each
 // coefficient is sampled from a gaussian distribution D_{Z, σ{f, g}, 0} with σ
 // = 1.17 * √(q/ 8192) as described in equation 3.29 on page 34 of the Falcon
@@ -47,7 +51,7 @@ is_poly_invertible(const int32_t* const poly)
 
   for (size_t i = 0; i < N; i++) {
     const bool flg = poly[i] < 0;
-    tmp.v = static_cast<uint16_t>(flg * q + poly[i]);
+    tmp[i].v = static_cast<uint16_t>(flg * q + poly[i]);
   }
 
   ntt::ntt<LOG2N>(tmp);
@@ -104,21 +108,29 @@ sqrd_norm(const fft::cmplx* const poly)
 // https://falcon-sign.info/falcon.pdf ) does.
 template<const size_t LOG2N>
 static inline double
-gram_schmidt_norm(const double* const __restrict f,
-                  const double* const __restrict g)
+gram_schmidt_norm(const int32_t* const __restrict f,
+                  const int32_t* const __restrict g)
 {
   constexpr size_t N = 1ul << LOG2N;
   constexpr double q = ff::Q;
   constexpr double qxq = q * q;
 
-  const auto sq_norm_fg = sqrd_norm<LOG2N>(f) + sqrd_norm<LOG2N>(g);
+  double tmp0[N];
+  double tmp1[N];
+
+  for (size_t i = 0; i < N; i++) {
+    tmp0[i] = static_cast<double>(f[i]);
+    tmp1[i] = static_cast<double>(g[i]);
+  }
+
+  const auto sq_norm_fg = sqrd_norm<LOG2N>(tmp0) + sqrd_norm<LOG2N>(tmp1);
 
   fft::cmplx f_[N];
   fft::cmplx g_[N];
 
   for (size_t i = 0; i < N; i++) {
-    f_[i] = fft::cmplx{ f[i] };
-    g_[i] = fft::cmplx{ g[i] };
+    f_[i] = fft::cmplx{ tmp0[i] };
+    g_[i] = fft::cmplx{ tmp1[i] };
   }
 
   fft::fft<LOG2N>(f_);
@@ -488,6 +500,52 @@ ntru_solve(const std::array<mpz_class, N>& f, const std::array<mpz_class, N>& g)
 
     reduce(f, g, F, G);
     return { { F, G }, ntru_solve_status_t{} };
+  }
+}
+
+// Given a modulus q ( = 12289 ), this routine generates four polynomials f, g,
+// F, G ∈ Z[x]/(x^N + 1), solving NTRU equation ( see eq 3.15 of Falcon
+// specification ). This routine is an implementation of algorithm 5 of Falcon
+// specification https://falcon-sign.info/falcon.pdf
+template<const size_t N>
+static inline void
+ntru_gen(int32_t* const __restrict f,
+         int32_t* const __restrict g,
+         int32_t* const __restrict F,
+         int32_t* const __restrict G)
+  requires((N == 512) || (N == 1024))
+{
+  while (1) {
+    gen_poly<log2<N>()>(f);
+    gen_poly<log2<N>()>(g);
+
+    if (!is_poly_invertible<log2<N>()>(f)) {
+      continue;
+    }
+
+    const double gsnorm = gram_schmidt_norm<log2<N>()>(f, g);
+    if (gsnorm > GS_NORM_THRESHOLD) {
+      continue;
+    }
+
+    std::array<mpz_class, N> f_;
+    std::array<mpz_class, N> g_;
+
+    for (size_t i = 0; i < N; i++) {
+      f_[i] = mpz_class(f[i]);
+      g_[i] = mpz_class(g[i]);
+    }
+
+    const auto ret = ntru_solve(f_, g_);
+    if (!ret.second.is_solution()) {
+      continue;
+    }
+
+    for (size_t i = 0; i < N; i++) {
+      F[i] = static_cast<int32_t>(ret.first.first[i].get_si());
+      G[i] = static_cast<int32_t>(ret.first.second[i].get_si());
+    }
+    break;
   }
 }
 
