@@ -9,7 +9,7 @@ LFLAGS = -lgmpxx -lgmp
 all: testing
 
 test/a.out: test/main.cpp include/*.hpp include/test/*.hpp
-	$(CXX) $(CXXFLAGS) $(OPTFLAGS) $(IFLAGS) $(DEP_IFLAGS) $(LFLAGS) $< -o $@
+	$(CXX) $(CXXFLAGS) $(OPTFLAGS) $(IFLAGS) $(DEP_IFLAGS) $< -o $@ $(LFLAGS)
 
 testing: test/a.out
 	./$<
