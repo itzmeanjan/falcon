@@ -221,9 +221,18 @@ struct ff_t
   {
     std::random_device rd;
     std::mt19937_64 gen(rd());
-    std::uniform_int_distribution<uint16_t> dis{ 0, Q - 1 };
+    std::uniform_int_distribution<uint16_t> dis;
 
-    return ff_t{ dis(gen) };
+    ff_t res{};
+    for (size_t i = 0; i < (1ul << 10); i++) {
+      const auto v = dis(gen);
+      if (v < ff::Q) {
+        res.v = v;
+        break;
+      }
+    }
+
+    return res;
   }
 
   // Writes element of Z_q to output stream
