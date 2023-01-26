@@ -1,8 +1,10 @@
 #pragma once
+#include "gmpxx.h"
 #include "karatsuba.hpp"
 #include "polynomial.hpp"
 #include "samplerz.hpp"
 #include <array>
+#include <utility>
 
 // Generate f, g, F, G ∈ Z[x]/(φ) | fG − gF = q mod φ ( i.e. NTRU equation )
 namespace ntru_gen {
@@ -253,7 +255,7 @@ lift(const std::array<mpz_class, N>& poly)
 template<const size_t N>
 static inline std::array<mpz_class, N>
 galois_conjugate(const std::array<mpz_class, N>& poly)
-  requires((N >= 1) && (N & (N - 1)) == 0)
+  requires((N > 1) && (N & (N - 1)) == 0)
 {
   std::array<mpz_class, N> res;
   for (size_t i = 0; i < N; i++) {
@@ -284,6 +286,28 @@ approx_bit_len(const mpz_class& v)
   }
 
   return len;
+}
+
+// Given a polynomial of degree N ( s.t. > 1 and power of 2 ), this routine find
+// minimum and maximum coefficient from that polynomial.
+template<const size_t N>
+static inline std::pair<mpz_class, mpz_class>
+min_max(const std::array<mpz_class, N>& arr)
+  requires((N > 1) && (N & (N - 1)) == 0)
+{
+  mpz_class min(arr[0]);
+  mpz_class max(arr[0]);
+
+  for (size_t i = 1; i < N; i++) {
+    if (min > arr[i]) {
+      min = arr[i];
+    }
+    if (max < arr[i]) {
+      max = arr[i];
+    }
+  }
+
+  return { min, max };
 }
 
 }
