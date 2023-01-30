@@ -30,6 +30,7 @@ compute_gram_matrix(
   fft::cmplx tmp[N];
 
   // compute B*
+  std::memcpy(B_adj, B, sizeof(B_adj));
   fft::adj_poly<log2<N>()>(B_adj);
   fft::adj_poly<log2<N>()>(B_adj + N);
   fft::adj_poly<log2<N>()>(B_adj + 2 * N);
@@ -41,17 +42,17 @@ compute_gram_matrix(
   polynomial::add_to<log2<N>()>(G, tmp);
 
   // compute G[0][1]
-  polynomial::mul<log2<N>()>(B, B_adj + 2 * N, G);
+  polynomial::mul<log2<N>()>(B, B_adj + 2 * N, G + N);
   polynomial::mul<log2<N>()>(B + N, B_adj + 3 * N, tmp);
   polynomial::add_to<log2<N>()>(G + N, tmp);
 
   // compute G[1][0]
-  polynomial::mul<log2<N>()>(B + 2 * N, B_adj, G);
+  polynomial::mul<log2<N>()>(B + 2 * N, B_adj, G + 2 * N);
   polynomial::mul<log2<N>()>(B + 3 * N, B_adj + N, tmp);
   polynomial::add_to<log2<N>()>(G + 2 * N, tmp);
 
   // compute G[1][1]
-  polynomial::mul<log2<N>()>(B + 2 * N, B_adj + 2 * N, G);
+  polynomial::mul<log2<N>()>(B + 2 * N, B_adj + 2 * N, G + 3 * N);
   polynomial::mul<log2<N>()>(B + 3 * N, B_adj + 3 * N, tmp);
   polynomial::add_to<log2<N>()>(G + 3 * N, tmp);
 }
