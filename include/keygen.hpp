@@ -57,4 +57,42 @@ compute_gram_matrix(
   polynomial::add_to<log2<N>()>(G + 3 * N, tmp);
 }
 
+// Given two degree N polynomials f, g s.t. f is invertible mod q ( = 12289 ),
+// this routine computes h = gf^-1 mod q, which is the Falcon public key,
+// following step 9 of algorithm 4 of Falcon specification
+// https://falcon-sign.info/falcon.pdf
+template<const size_t N>
+static inline void
+compute_public_key(const int32_t* const __restrict f,
+                   const int32_t* const __restrict g,
+                   int32_t* const __restrict h)
+  requires((N > 1) && ((N & (N - 1)) == 0) && (N <= 1024))
+{
+  constexpr int32_t q = ff::Q;
+  constexpr int32_t qby2 = q / 2;
+
+  ff::ff_t f_[N];
+  ff::ff_t g_[N];
+  ff::ff_t h_[N];
+
+  // Input polynomials f, g has its coefficients ∈ [-6145, 6143], but for
+  // performing division in NTT domain, we need to convert them into [0, 12289)
+  for (size_t i = 0; i < N; i++) {
+    f_[i].v = static_cast<uint16_t>((f[i] < 0) * q + f[i]);
+    g_[i].v = static_cast<uint16_t>((g[i] < 0) * q + g[i]);
+  }
+
+  ntt::ntt<log2<N>()>(f_);
+  ntt::ntt<log2<N>()>(g_);
+  polynomial::div<log2<N>()>(g_, f_, h_);
+  ntt::intt<log2<N>()>(h_);
+
+  // Computed polynomial h has its coefficients ∈ [0, 12289), but we need them
+  // to be living in [-6145, 6143]
+  for (size_t i = 0; i < N; i++) {
+    const bool flg = static_cast<int32_t>(h_[i]) > (qby2 - 1);
+    h[i] = static_cast<int32_t>(h_[i]) - flg * q;
+  }
+}
+
 }
