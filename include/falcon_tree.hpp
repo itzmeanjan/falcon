@@ -2,6 +2,7 @@
 #include "common.hpp"
 #include "fft.hpp"
 #include "polynomial.hpp"
+#include <cmath>
 #include <cstring>
 
 // Construction of Falcon Tree from f, g, F, G ∈ Z[x]/(x^n + 1)
@@ -36,17 +37,17 @@ ldl(const fft::cmplx* const __restrict G,
 }
 
 // Given a full-rank Gram matrix G ∈ FFT(Q[x]/ (x^N + 1))^(2×2), this routine
-// computes Falcon tree T ( which is a binary tree ), by recursively splitting
+// computes LDL tree T ( which is a binary tree ), by recursively splitting
 // diagonal elements of D, which is obtained by repeated LDL* decomposition of
 // G, in recursive manner, following algorithm 9 of Falcon specification
 // https://falcon-sign.info/falcon.pdf.
 //
-// For understanding Falcon tree, you should look at figure 3.1 of specification
+// For understanding LDL tree, you should look at figure 3.1 of specification
 // and read bottom of page 26 of specification. Finally you should also go
 // through section 3.8.3 of specification for understanding how it can be
 // implemented.
 //
-// Note, falcon tree ( of height k ) being a binary tree, can be stored using (1
+// Note, LDL tree ( of height k ) being a binary tree, can be stored using (1
 // + k) * 2^k complex numbers i.e. ensure that memory allocated under owner T
 // has enough space for storing those many complex numbers. Also note, at
 // deepest level of recursion i.e. when N = 2, only real part of complex number
@@ -100,6 +101,34 @@ ffldl(const fft::cmplx* const __restrict G, fft::cmplx* const __restrict T)
 
     ffldl<N / 2, AT_LEVEL + 1, T_HEIGHT>(G0, T + tree_off);
     ffldl<N / 2, AT_LEVEL + 1, T_HEIGHT>(G1, T + tree_off + (N / 2));
+
+    return;
+  }
+}
+
+// Normalizes LDL tree's leaf nodes computing a Falcon tree, following step 6, 7
+// of algorithm 4 of Falcon specification https://falcon-sign.info/falcon.pdf
+template<const size_t N, const size_t AT_LEVEL, const size_t T_HEIGHT>
+static inline constexpr void
+normalize_tree(fft::cmplx* const T, const double σ)
+  requires((N > 1) && ((N & (N - 1)) == 0) && (N <= 1024) &&
+           (AT_LEVEL < T_HEIGHT) && (N == (1ul << (T_HEIGHT - AT_LEVEL))))
+{
+  constexpr size_t node_cnt = 1ul << AT_LEVEL;
+  constexpr size_t tree_off = node_cnt * N;
+
+  if constexpr (N == 2) {
+    // deepest level of recursion !
+    static_assert(AT_LEVEL == (T_HEIGHT - 1),
+                  "Can't go below this level of tree !");
+
+    T[tree_off] = σ / std::sqrt(T[tree_off].real());
+    T[tree_off + (N / 2)] = σ / std::sqrt(T[tree_off + (N / 2)].real());
+
+    return;
+  } else {
+    normalize_tree<N / 2, AT_LEVEL + 1, T_HEIGHT>(T + tree_off, σ);
+    normalize_tree<N / 2, AT_LEVEL + 1, T_HEIGHT>(T + tree_off + (N / 2), σ);
 
     return;
   }
