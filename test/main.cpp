@@ -39,5 +39,9 @@ main()
   test_falcon::test_encoding_pkey<1024>();
   std::cout << "[test] Encode/ Decode Public Key\n";
 
+  test_falcon::test_encoding_skey<512>();
+  test_falcon::test_encoding_skey<1024>();
+  std::cout << "[test] Encode/ Decode Secret Key\n";
+
   return EXIT_SUCCESS;
 }
