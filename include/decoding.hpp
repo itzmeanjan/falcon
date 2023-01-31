@@ -1,8 +1,6 @@
 #pragma once
 #include "common.hpp"
-#include "ff.hpp"
 #include "utils.hpp"
-#include <cassert>
 #include <cstring>
 
 // Falcon KeyPair and Signature Decoding Routines
