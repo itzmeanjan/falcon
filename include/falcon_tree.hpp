@@ -1,6 +1,5 @@
 #pragma once
 #include "common.hpp"
-#include "fft.hpp"
 #include "polynomial.hpp"
 #include <cmath>
 #include <cstring>
