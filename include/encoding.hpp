@@ -65,7 +65,7 @@ encode_skey(const int32_t* const __restrict f,
 
       skey[skoff + 0] = (f1 << 6) | f0;
       skey[skoff + 1] = (f2 << 4) | (f1 >> 2);
-      skey[skoff + 3] = (f3 << 2) | (f2 >> 4);
+      skey[skoff + 2] = (f3 << 2) | (f2 >> 4);
     }
 
     // same for g, coefficients use 6 -bits i.e. they ∈ [-31, 31]
@@ -82,7 +82,7 @@ encode_skey(const int32_t* const __restrict f,
 
       skey[skoff + 0] = (g1 << 6) | g0;
       skey[skoff + 1] = (g2 << 4) | (g1 >> 2);
-      skey[skoff + 3] = (g3 << 2) | (g2 >> 4);
+      skey[skoff + 2] = (g3 << 2) | (g2 >> 4);
     }
   } else {
     // force compile-time branch evaluation
