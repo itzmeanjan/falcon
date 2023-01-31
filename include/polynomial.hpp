@@ -21,6 +21,21 @@ add(const fft::cmplx* const __restrict polya,
   }
 }
 
+// Accumulate one degree-{(1 << lg2n) - 1} polynomial into another one ( of same
+// degree ), when both of them are in their FFT form, by performing element-wise
+// addition over C
+template<const size_t lg2n>
+static inline void
+add_to(fft::cmplx* const __restrict polya,
+       const fft::cmplx* const __restrict polyb)
+{
+  constexpr size_t n = 1ul << lg2n;
+
+  for (size_t i = 0; i < n; i++) {
+    polya[i] += polyb[i];
+  }
+}
+
 // Subtracts one degree-{(1 << lg2n) - 1} polynomial from another one, when both
 // them are in their FFT form, by performing element-wise subtraction over C
 template<const size_t lg2n>
