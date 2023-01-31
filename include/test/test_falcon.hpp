@@ -1,5 +1,6 @@
 #pragma once
 
+#include "test_encoding.hpp"
 #include "test_ff.hpp"
 #include "test_fft.hpp"
 #include "test_ntru_gen.hpp"

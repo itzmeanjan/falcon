@@ -1,3 +1,4 @@
+#include "test/test_encoding.hpp"
 #include "test/test_falcon.hpp"
 #include <iostream>
 
@@ -33,6 +34,10 @@ main()
   test_falcon::test_ntru_gen<512>();
   test_falcon::test_ntru_gen<1024>();
   std::cout << "[test] NTRUGen\n";
+
+  test_falcon::test_encoding_pkey<512>();
+  test_falcon::test_encoding_pkey<1024>();
+  std::cout << "[test] Encode/ Decode Public Key\n";
 
   return EXIT_SUCCESS;
 }
