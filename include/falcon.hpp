@@ -34,4 +34,50 @@ keygen(uint8_t* const __restrict pkey, uint8_t* const __restrict skey)
   encoding::encode_skey<N>(f, g, F, skey);
 }
 
+// Given three degree N polynomials f, g and F, this routine recomputes G using
+// NTRU equation fG - gF = q mod φ.
+//
+// This routine will be useful when secret key is loaded from disk ( which holds
+// byte encapsulated value of polynomials f, g and F ) and G needs to be
+// computed again because all of four polynomials f, g, F and G are required for
+// computing Falcon Tree T, which is used for signing messages.
+template<const size_t N>
+static inline void
+recompute_G(const int32_t* const __restrict f,
+            const int32_t* const __restrict g,
+            const int32_t* const __restrict F,
+            int32_t* const __restrict G)
+  requires((N == 512) || (N == 1024))
+{
+  constexpr double Q = ff::Q;
+
+  fft::cmplx f_[N];
+  fft::cmplx g_[N];
+  fft::cmplx F_[N];
+  fft::cmplx G_[N];
+  fft::cmplx q[N];
+  fft::cmplx tmp[N];
+
+  for (size_t i = 0; i < N; i++) {
+    f_[i] = fft::cmplx{ static_cast<double>(f[i]) };
+    g_[i] = fft::cmplx{ static_cast<double>(g[i]) };
+    F_[i] = fft::cmplx{ static_cast<double>(F[i]) };
+    q[i] = fft::cmplx{ Q };
+  }
+
+  fft::fft<log2<N>()>(f_);
+  fft::fft<log2<N>()>(g_);
+  fft::fft<log2<N>()>(F_);
+
+  polynomial::mul<log2<N>()>(g_, F_, tmp);
+  polynomial::add_to<log2<N>()>(tmp, q);
+  polynomial::div<log2<N>()>(tmp, f_, G_);
+
+  fft::ifft<log2<N>()>(G_);
+
+  for (size_t i = 0; i < N; i++) {
+    G[i] = static_cast<int32_t>(std::round(G_[i].real()));
+  }
+}
+
 }
