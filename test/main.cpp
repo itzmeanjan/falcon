@@ -1,4 +1,3 @@
-#include "test/test_encoding.hpp"
 #include "test/test_falcon.hpp"
 #include <iostream>
 
@@ -10,7 +9,7 @@ main()
 
   test_falcon::test_ntt<ntt::FALCON512_LOG2N>();
   test_falcon::test_ntt<ntt::FALCON1024_LOG2N>();
-  std::cout << "[test] (inverse) Number Theoretic Transform over field Z_q\n";
+  std::cout << "[test] (inverse) Number Theoretic Transform over Z_q\n";
 
   test_falcon::test_fft<ntt::FALCON512_LOG2N>();
   test_falcon::test_fft<ntt::FALCON1024_LOG2N>();
@@ -42,6 +41,10 @@ main()
   test_falcon::test_encoding_skey<512>();
   test_falcon::test_encoding_skey<1024>();
   std::cout << "[test] Encode/ Decode Secret Key\n";
+
+  test_falcon::test_keygen<512>();
+  test_falcon::test_keygen<1024>();
+  std::cout << "[test] Falcon KeyGen\n";
 
   return EXIT_SUCCESS;
 }
