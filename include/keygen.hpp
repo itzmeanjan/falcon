@@ -1,5 +1,8 @@
 #pragma once
 #include "falcon_tree.hpp"
+#include "ff.hpp"
+#include "fft.hpp"
+#include "ntru_gen.hpp"
 
 // Falcon{512, 1024} Key Pair Generation related Routines
 namespace keygen {
@@ -84,6 +87,51 @@ compute_public_key(const int32_t* const __restrict f,
   ntt::ntt<log2<N>()>(g_);
   polynomial::div<log2<N>()>(g_, f_, h);
   ntt::intt<log2<N>()>(h);
+}
+
+// Falcon{512, 1024} key generation algorithm i.e. an implementation of
+// algorithm 4 of Falcon specification which takes only standard deviation σ as
+// input ( see table 3.3 of Falcon specification for possible values that it can
+// take ) and computes FFT form of 2x2 matrix B = [[g, -f], [G, -F]], Falcon
+// Tree T ( also in FFT form ) and Falcon public key h = gf^-1 mod q ( s.t. q =
+// 12289 ).
+//
+// Note, B and T are part of Falcon secret key, while h is Falcon public key.
+template<const size_t N>
+static inline void
+keygen(fft::cmplx* const __restrict B, // FFT form of [[g, -f], [G, -F]]
+       fft::cmplx* const __restrict T, // Falcon Tree
+       ff::ff_t* const __restrict h,   // Falcon Public Key
+       const double σ // Standard deviation ( see table 3.3 of specification )
+       )
+  requires((N == 512) || (N == 1024))
+{
+  int32_t f[N];
+  int32_t g[N];
+  int32_t F[N];
+  int32_t G[N];
+
+  ntru_gen::ntru_gen<N>(f, g, F, G);
+
+  for (size_t i = 0; i < N; i++) {
+    B[i] = fft::cmplx{ static_cast<double>(g[i]) };
+    B[N + i] = fft::cmplx{ -static_cast<double>(f[i]) };
+    B[2 * N + i] = fft::cmplx{ static_cast<double>(G[i]) };
+    B[3 * N + i] = fft::cmplx{ -static_cast<double>(F[i]) };
+  }
+
+  fft::fft<log2<N>()>(B);
+  fft::fft<log2<N>()>(B + N);
+  fft::fft<log2<N>()>(B + 2 * N);
+  fft::fft<log2<N>()>(B + 3 * N);
+
+  fft::cmplx gram_matrix[2 * 2 * N];
+  compute_gram_matrix<N>(B, gram_matrix);
+
+  falcon_tree::ffldl<N, 0, log2<N>()>(gram_matrix, T);
+  falcon_tree::normalize_tree<N, 0, log2<N>()>(T, σ);
+
+  compute_public_key<N>(f, g, h);
 }
 
 }
