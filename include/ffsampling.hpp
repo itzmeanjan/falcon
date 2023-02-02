@@ -57,7 +57,7 @@ ff_sampling(const fft::cmplx* const __restrict t0,
     ff_sampling<N / 2, AT_LEVEL + 1, T_HEIGHT>(t1_0, t1_1, Tr, σ_min, z0r, z1r);
 
     fft::cmplx merged_z1[N];
-    fft::merge_fft<log2<N / 2>()>(z0r, z1r, merged_z1);
+    fft::merge_fft<log2<N>()>(z0r, z1r, merged_z1);
 
     fft::cmplx tmp0[N];
     fft::cmplx tmp1[N];
@@ -74,7 +74,7 @@ ff_sampling(const fft::cmplx* const __restrict t0,
     ff_sampling<N / 2, AT_LEVEL + 1, T_HEIGHT>(t0_0, t0_1, Tl, σ_min, z0l, z1l);
 
     fft::cmplx merged_z0[N];
-    fft::merge_fft<log2<N / 2>()>(z0l, z1l, merged_z0);
+    fft::merge_fft<log2<N>()>(z0l, z1l, merged_z0);
 
     std::memcpy(z0, merged_z0, sizeof(merged_z0));
     std::memcpy(z1, merged_z1, sizeof(merged_z1));
