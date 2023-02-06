@@ -1,5 +1,7 @@
 #pragma once
 #include "common.hpp"
+#include <complex>
+#include <cstring>
 
 // Falcon KeyPair and Signature Encoding Routines
 namespace encoding {
@@ -148,6 +150,84 @@ encode_skey(const int32_t* const __restrict f,
   for (size_t Foff = 0; Foff < N; Foff++, skoff++) {
     skey[skoff] = static_cast<uint8_t>(F[Foff]);
   }
+}
+
+// Given a degree N polynomials with coefficients ∈ Z[x] s.t. they are
+// distributed around 0 according to a discrete Gaussian distribution, this
+// routine attempts to compress it using (sbytelen * 8 - 328) -bits, following
+// algorithm 17 of Falcon specification https://falcon-sign.info/falcon.pdf
+template<const size_t N, const size_t sbytelen>
+static inline bool
+compress_sig(const int32_t* const __restrict poly_s,
+             uint8_t* const __restrict sig)
+  requires(((N == 512) && (sbytelen == 666)) ||
+           ((N == 1024) && (sbytelen == 1280)))
+{
+  constexpr size_t slen = 8 * sbytelen - (8 + 320); // signature bit length
+  constexpr size_t max_sbytelen = (std::bit_width(ff::Q) * N) / 8;
+  constexpr int32_t mask = 0x7f;
+
+  uint8_t sig_buf[max_sbytelen]{};
+
+  size_t bit_idx = 0;
+  size_t coeff_idx = 0;
+
+  while (coeff_idx < N) {
+    // encode sign bit
+    {
+      const size_t byte_idx = bit_idx >> 3;
+      const size_t from_bit = bit_idx & 7ul;
+
+      sig_buf[byte_idx] |= ((poly_s[coeff_idx] < 0) * 1) << (7 - from_bit);
+
+      bit_idx += 1;
+    }
+
+    // encode low 7 -bits of coefficient
+    {
+      const size_t byte_idx = bit_idx >> 3;
+      const size_t from_bit = bit_idx & 7ul;
+      const size_t writable_bits = 7 - from_bit + 1;
+      const bool flg0 = writable_bits <= 7;
+      const bool flg1 = writable_bits < 7;
+
+      const int32_t selected = std::abs(poly_s[coeff_idx]) & mask;
+      const uint8_t patha = flg0 * (selected >> (7 - writable_bits));
+      const uint8_t pathb = !flg0 * (selected << 1);
+      const uint8_t pathc = flg1 * (selected << (writable_bits + 1));
+
+      sig_buf[byte_idx] |= patha | pathb;
+      sig_buf[byte_idx + flg1] |= pathc;
+
+      bit_idx += 7;
+    }
+
+    // encode high bits of coefficient, in unary code
+    {
+      const size_t byte_idx = bit_idx >> 3;
+      const size_t from_bit = bit_idx & 7ul;
+
+      const size_t writable_bits = 7 - from_bit + 1;
+      const size_t k = std::abs(poly_s[coeff_idx]) >> 7;
+      const bool flg = writable_bits < (k + 1);
+
+      const uint8_t coded = 0x80 >> k;
+      const uint8_t patha = coded >> from_bit;
+      const uint8_t pathb = flg * (coded << ((k + 1) - writable_bits));
+
+      sig_buf[byte_idx] |= patha;
+      sig_buf[byte_idx + flg] |= pathb;
+
+      bit_idx += (k + 1);
+    }
+
+    coeff_idx += 1;
+  }
+
+  std::memset(sig_buf, 0, max_sbytelen * (bit_idx >= slen));
+  std::memcpy(sig + (1 + 40), sig_buf, sbytelen - (1 + 40));
+
+  return bit_idx < slen;
 }
 
 }
