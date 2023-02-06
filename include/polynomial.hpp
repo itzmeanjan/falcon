@@ -1,4 +1,5 @@
 #pragma once
+#include "ff.hpp"
 #include "fft.hpp"
 #include "ntt.hpp"
 
@@ -28,6 +29,20 @@ template<const size_t lg2n>
 static inline void
 add_to(fft::cmplx* const __restrict polya,
        const fft::cmplx* const __restrict polyb)
+{
+  constexpr size_t n = 1ul << lg2n;
+
+  for (size_t i = 0; i < n; i++) {
+    polya[i] += polyb[i];
+  }
+}
+
+// Accumulate one degree-{(1 << lg2n) - 1} polynomial into another one ( of same
+// degree ), when both of them are in their NTT form, by performing element-wise
+// addition over Z_q
+template<const size_t lg2n>
+static inline void
+add_to(ff::ff_t* const __restrict polya, const ff::ff_t* const __restrict polyb)
 {
   constexpr size_t n = 1ul << lg2n;
 

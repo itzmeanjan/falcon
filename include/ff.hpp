@@ -84,6 +84,17 @@ struct ff_t
     return ff_t{ t1 };
   }
 
+  // Adds one Z_q element with another one, while mutating the first one i.e.
+  // compound addition operation
+  constexpr void operator+=(const ff_t& rhs)
+  {
+    const uint16_t t0 = this->v + rhs.v;
+    const bool flg = t0 >= Q;
+    const uint16_t t1 = t0 - flg * Q;
+
+    this->v = t1;
+  }
+
   // Subtraction over prime field Z_q
   constexpr ff_t operator-(const ff_t& rhs) const
   {

@@ -9,15 +9,6 @@ namespace fft {
 
 using cmplx = std::complex<double>;
 
-// Compile-time check to ensure that we're working with
-//
-// N ∈ [2..1024] && N = 2^k | k ∈ [1, 10]
-consteval bool
-check_log2n(const size_t lgn)
-{
-  return (lgn >= 1) && (lgn <= 10);
-}
-
 // Given a 64 -bit unsigned integer, this routine extracts specified many
 // contiguous bits from ( least significant bit ) LSB side & reverses their bit
 // order, returning bit reversed `mbw` -bit wide number
@@ -28,7 +19,7 @@ check_log2n(const size_t lgn)
 template<const size_t mbw>
 inline static constexpr size_t
 bit_rev(const size_t v)
-  requires(check_log2n(mbw))
+  requires((mbw > 0) && (mbw <= 10))
 {
   size_t v_rev = 0ul;
 
@@ -64,7 +55,7 @@ computeζ(const size_t k)
 template<const size_t LOG2N>
 inline void
 fft(cmplx* const __restrict vec)
-  requires(check_log2n(LOG2N))
+  requires((LOG2N > 0) && (LOG2N <= 10))
 {
   constexpr size_t N = 1ul << LOG2N;
 
@@ -99,7 +90,7 @@ fft(cmplx* const __restrict vec)
 template<const size_t LOG2N>
 inline void
 ifft(cmplx* const __restrict vec)
-  requires(check_log2n(LOG2N))
+  requires((LOG2N > 0) && (LOG2N <= 10))
 {
   constexpr size_t N = 1ul << LOG2N;
   constexpr double INV_N = 1. / static_cast<double>(N);
@@ -138,7 +129,7 @@ inline void
 split_fft(const cmplx* const __restrict f,
           cmplx* const __restrict f0,
           cmplx* const __restrict f1)
-  requires(check_log2n(LOG2N))
+  requires((LOG2N > 0) && (LOG2N <= 10))
 {
   constexpr size_t N = 1ul << LOG2N;
   constexpr size_t hN = N >> 1;
@@ -161,6 +152,7 @@ inline void
 merge_fft(const cmplx* const __restrict f0,
           const cmplx* const __restrict f1,
           cmplx* const __restrict f)
+  requires((LOG2N > 0) && (LOG2N <= 10))
 {
   constexpr size_t N = 1ul << LOG2N;
   constexpr size_t hN = N >> 1;
@@ -179,6 +171,7 @@ merge_fft(const cmplx* const __restrict f0,
 template<const size_t LOG2N>
 static inline void
 adj_poly(cmplx* const poly)
+  requires((LOG2N > 0) && (LOG2N <= 10))
 {
   constexpr size_t N = 1ul << LOG2N;
 

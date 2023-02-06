@@ -46,5 +46,9 @@ main()
   test_falcon::test_keygen<1024>();
   std::cout << "[test] Falcon KeyGen\n";
 
+  test_falcon::test_ff_sampling<512>(165.736617183, 1.277833697);
+  test_falcon::test_ff_sampling<1024>(168.388571447, 1.298280334);
+  std::cout << "[test] Fast Fourier Sampling\n";
+
   return EXIT_SUCCESS;
 }
