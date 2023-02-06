@@ -170,4 +170,108 @@ decode_skey(const uint8_t* const __restrict skey,
   return true;
 }
 
+// Given compressed signature bytes, this routine attempts to decompress it back
+// to a degree N polynomial s.t. coefficients ∈ Z[x] and they are distributed
+// around 0, using algorithm 18 of Falcon specification
+// https://falcon-sign.info/falcon.pdf
+//
+// Layout of sig = <8 -bits of header> +
+//                 <320 -bits of salt> +
+//                 <{666, 1280} - 41 -bytes of compressed signature>
+//
+// This routine doesn't access first 41 -bytes of signature.
+template<const size_t N, const size_t sbytelen>
+static inline bool
+decompress_sig(const uint8_t* const __restrict sig,
+               int32_t* const __restrict poly_s)
+  requires(((N == 512) && (sbytelen == 666)) ||
+           ((N == 1024) && (sbytelen == 1280)))
+{
+  constexpr size_t slen = 8 * sbytelen; // signature bit length
+
+  size_t bit_idx = 8 +  // header byte
+                   320; // salt bytes
+  size_t coeff_idx = 0;
+  bool failed = false;
+
+  while (coeff_idx < N) {
+    int32_t coeff = 0;
+    uint8_t sign_bit = 0;
+
+    // extract sign bit
+    {
+      const size_t byte_idx = bit_idx >> 3;
+      const size_t from_bit = bit_idx & 7ul;
+
+      sign_bit = (sig[byte_idx] >> (7 - from_bit)) & 0b1;
+      bit_idx += 1;
+    }
+
+    // extract next 7 bits, which are low bits of coefficient
+    {
+      for (size_t i = bit_idx; i < 7; i++) {
+        const size_t byte_idx = i >> 3;
+        const size_t from_bit = i & 7ul;
+
+        const uint8_t bit = (sig[byte_idx] >> (7 - from_bit)) & 0b1;
+        coeff |= static_cast<int32_t>(bit << (6 - (i - bit_idx)));
+      }
+
+      bit_idx += 7;
+    }
+
+    // extract high bits of coefficient, which was encoded using unary code
+    {
+      size_t k = 0;
+
+      for (size_t i = bit_idx;; i++) {
+        const size_t byte_idx = i >> 3;
+        const size_t from_bit = i & 7ul;
+
+        const uint8_t bit = (sig[byte_idx] >> (7 - from_bit)) & 0b1;
+        if (bit != 0) {
+          break;
+        }
+
+        k += 1;
+      }
+
+      coeff += (1 << 7) * k;
+      bit_idx += k;
+    }
+
+    // recompute coefficient s_i
+    coeff = (-1 * (sign_bit == 1)) * coeff;
+
+    // enforce unique encoding of 0
+    failed |= (coeff == 0) && (sign_bit == 1);
+    if (failed) {
+      break;
+    }
+
+    // all good with decoding of this coefficient
+    poly_s[coeff_idx] = coeff;
+
+    bit_idx += 1;
+    coeff_idx += 1;
+  }
+
+  // enforce trailing bits are 0
+  failed |= bit_idx >= slen;
+  if (!failed) {
+    while (bit_idx < slen) {
+      const size_t byte_idx = bit_idx >> 3;
+      const size_t from_bit = bit_idx & 7ul;
+
+      const uint8_t bit = (sig[byte_idx] >> (7 - from_bit)) & 0b1;
+      failed |= (bit != 0);
+
+      bit_idx += 1;
+    }
+  }
+
+  std::memset(poly_s, 0, sizeof(int32_t) * N * failed);
+  return !failed;
+}
+
 }

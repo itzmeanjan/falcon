@@ -156,6 +156,13 @@ encode_skey(const int32_t* const __restrict f,
 // distributed around 0 according to a discrete Gaussian distribution, this
 // routine attempts to compress it using (sbytelen * 8 - 328) -bits, following
 // algorithm 17 of Falcon specification https://falcon-sign.info/falcon.pdf
+//
+// Layout of sig = <8 -bits of header> +
+//                 <320 -bits of salt> +
+//                 <{666, 1280} - 41 -bytes of compressed signature>
+//
+// This routine doesn't access first 41 -bytes of signature, setting those bytes
+// properly is not responsibility of this routine.
 template<const size_t N, const size_t sbytelen>
 static inline bool
 compress_sig(const int32_t* const __restrict poly_s,
