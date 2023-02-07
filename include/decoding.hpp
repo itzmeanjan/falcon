@@ -241,7 +241,7 @@ decompress_sig(const uint8_t* const __restrict sig,
     }
 
     // recompute coefficient s_i
-    coeff = (-1 * (sign_bit == 1)) * coeff;
+    coeff = sign_bit == 1 ? -coeff : coeff;
 
     // enforce unique encoding of 0
     failed |= (coeff == 0) && (sign_bit == 1);
