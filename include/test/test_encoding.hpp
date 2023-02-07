@@ -1,10 +1,13 @@
 #pragma once
+#include "common.hpp"
 #include "decoding.hpp"
 #include "encoding.hpp"
 #include "ffsampling.hpp"
 #include "hashing.hpp"
 #include "keygen.hpp"
 #include <cassert>
+#include <cstdlib>
+#include <cstring>
 
 // Test functional correctness of Falcon PQC suite implementation
 namespace test_falcon {
@@ -214,6 +217,50 @@ test_sig_compression(
 
   assert(decompressed);
   assert(matches);
+}
+
+// Generate random signature bytes and attempt to decompress it, see how
+// decompression routine behaves. In majority of the cases it should be failing
+// to decompress and if it succeeds, it should also be able to compress it
+// properly - check that situation too.
+template<const size_t N>
+void
+test_sig_decompression()
+{
+  // See table 3.3 of the specification
+  constexpr size_t siglens[]{ 666, 1280 };
+  constexpr size_t siglen = siglens[N == 1024];
+
+  auto sig0 = static_cast<uint8_t*>(std::malloc(siglen));
+  auto sig1 = static_cast<uint8_t*>(std::malloc(siglen));
+  auto s2 = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
+
+  // generate random signature bytes
+  random_fill(sig0, siglen);
+
+  // attempt to decompress random signature
+  const bool decompressed = decoding::decompress_sig<N, siglen>(sig0, s2);
+  // which will *most* probably fail
+  if (decompressed) {
+    // if anyhow decompressed, we should be able to compress it too
+    const bool compressed = encoding::compress_sig<N, siglen>(s2, sig1);
+    assert(compressed);
+
+    // if compressed, both should produce same signature
+    //
+    // note, we're skipping checking of first 41 bytes of signature, because
+    // that portion consists of header byte and salt bytes
+    bool matches = true;
+    for (size_t i = 41; i < siglen; i++) {
+      matches &= sig0[i] == sig1[i];
+    }
+
+    assert(matches);
+  }
+
+  std::free(sig0);
+  std::free(sig1);
+  std::free(s2);
 }
 
 }
