@@ -50,5 +50,11 @@ main()
   test_falcon::test_ff_sampling<1024>(168.388571447, 1.298280334);
   std::cout << "[test] Fast Fourier Sampling\n";
 
+  test_falcon::test_sig_compression<512>(165.736617183, 1.277833697, 34034726);
+  test_falcon::test_sig_compression<1024>(168.388571447, 1.298280334, 70265242);
+  test_falcon::test_sig_decompression<512>();
+  test_falcon::test_sig_decompression<1024>();
+  std::cout << "[test] Signature Compression/ Decompression\n";
+
   return EXIT_SUCCESS;
 }
