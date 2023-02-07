@@ -209,7 +209,7 @@ decompress_sig(const uint8_t* const __restrict sig,
 
     // extract next 7 bits, which are low bits of coefficient
     {
-      for (size_t i = bit_idx; i < 7; i++) {
+      for (size_t i = bit_idx; i < bit_idx + 7; i++) {
         const size_t byte_idx = i >> 3;
         const size_t from_bit = i & 7ul;
 
