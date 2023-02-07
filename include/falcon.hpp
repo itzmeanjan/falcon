@@ -105,4 +105,27 @@ compute_matrix_B(const int32_t* const __restrict f,
   fft::fft<log2<N>()>(B + 3 * N);
 }
 
+// Given a 2x2 matrix B ( in its FFT format ) s.t. B = [[g, -f], [G, -F]], this
+// routine computes a falcon tree T, in its FFT format s.t. it takes (k+1) * 2^k
+// -many complex numbers to store the full falcon tree when tree height is k =
+// log2(N)
+template<const size_t N>
+static inline void
+compute_falcon_tree(
+  const fft::cmplx* const __restrict B, // 2x2 matrix [[g, -f], [G, -F]]
+  fft::cmplx* const __restrict T        // Falcon Tree ( in FFT form )
+  )
+  requires((N == 512) || (N == 1024))
+{
+  // see table 3.3 of falcon specification
+  constexpr double σ_values[]{ 165.736617183, 168.388571447 };
+  constexpr double σ = σ_values[N == 1024];
+
+  fft::cmplx gram_matrix[2 * 2 * N];
+  keygen::compute_gram_matrix<N>(B, gram_matrix);
+
+  falcon_tree::ffldl<N, 0, log2<N>()>(gram_matrix, T);
+  falcon_tree::normalize_tree<N, 0, log2<N>()>(T, σ);
+}
+
 }
