@@ -1,5 +1,6 @@
 #pragma once
 #include "encoding.hpp"
+#include "fft.hpp"
 #include "keygen.hpp"
 
 // Falcon{512, 1024} Key Generation, Signing and Verification Algorithm
@@ -78,6 +79,30 @@ recompute_G(const int32_t* const __restrict f,
   for (size_t i = 0; i < N; i++) {
     G[i] = static_cast<int32_t>(std::round(G_[i].real()));
   }
+}
+
+// Given four degree N polynomials f, g, F and G, in coefficient form, this
+// routine computes a 2x2 matrix B, in its FFT form s.t. B = [[g, -f], [G, -F]]
+template<const size_t N>
+static inline void
+compute_matrix_B(const int32_t* const __restrict f,
+                 const int32_t* const __restrict g,
+                 const int32_t* const __restrict F,
+                 const int32_t* const __restrict G,
+                 fft::cmplx* const __restrict B)
+  requires((N == 512) || (N == 1024))
+{
+  for (size_t i = 0; i < N; i++) {
+    B[i] = fft::cmplx{ static_cast<double>(g[i]) };
+    B[N + i] = fft::cmplx{ -static_cast<double>(f[i]) };
+    B[2 * N + i] = fft::cmplx{ static_cast<double>(G[i]) };
+    B[3 * N + i] = fft::cmplx{ -static_cast<double>(F[i]) };
+  }
+
+  fft::fft<log2<N>()>(B);
+  fft::fft<log2<N>()>(B + N);
+  fft::fft<log2<N>()>(B + 2 * N);
+  fft::fft<log2<N>()>(B + 3 * N);
 }
 
 }
