@@ -5,7 +5,6 @@
 #include "hashing.hpp"
 #include "keygen.hpp"
 #include <cassert>
-#include <iostream>
 
 // Test functional correctness of Falcon PQC suite implementation
 namespace test_falcon {
