@@ -180,6 +180,9 @@ decode_skey(const uint8_t* const __restrict skey,
 //                 <{666, 1280} - 41 -bytes of compressed signature>
 //
 // This routine doesn't access first 41 -bytes of signature.
+//
+// In case of successful decompression, returns boolean truth value, otherwise
+// returns false, denoting decompression failure.
 template<const size_t N, const size_t sbytelen>
 static inline bool
 decompress_sig(const uint8_t* const __restrict sig,
