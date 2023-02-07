@@ -197,7 +197,7 @@ decompress_sig(const uint8_t* const __restrict sig,
   size_t coeff_idx = 0;
   bool failed = false;
 
-  while (coeff_idx < N) {
+  while ((coeff_idx < N) && (bit_idx < slen)) {
     int32_t coeff = 0;
     uint8_t sign_bit = 0;
 
@@ -227,7 +227,7 @@ decompress_sig(const uint8_t* const __restrict sig,
     {
       size_t k = 0;
 
-      for (size_t i = bit_idx;; i++) {
+      for (size_t i = bit_idx; i < slen; i++) {
         const size_t byte_idx = i >> 3;
         const size_t from_bit = i & 7ul;
 
@@ -252,7 +252,7 @@ decompress_sig(const uint8_t* const __restrict sig,
       break;
     }
 
-    // all good with decoding of this coefficient
+    // seems all good with decoding of this coefficient
     poly_s[coeff_idx] = coeff;
 
     bit_idx += 1;
@@ -260,7 +260,7 @@ decompress_sig(const uint8_t* const __restrict sig,
   }
 
   // enforce trailing bits are 0
-  failed |= bit_idx >= slen;
+  failed |= (bit_idx >= slen) | (coeff_idx < N);
   if (!failed) {
     while (bit_idx < slen) {
       const size_t byte_idx = bit_idx >> 3;
