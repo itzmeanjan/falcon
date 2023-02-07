@@ -163,6 +163,9 @@ encode_skey(const int32_t* const __restrict f,
 //
 // This routine doesn't access first 41 -bytes of signature, setting those bytes
 // properly is not responsibility of this routine.
+//
+// In case of successful compression, returns boolean truth value, otherwise
+// returns false, denoting compression failure.
 template<const size_t N, const size_t sbytelen>
 static inline bool
 compress_sig(const int32_t* const __restrict poly_s,
@@ -172,7 +175,6 @@ compress_sig(const int32_t* const __restrict poly_s,
 {
   constexpr size_t slen = 8 * sbytelen - (8 + 320); // signature bit length
   constexpr size_t max_sbytelen = (std::bit_width(ff::Q) * N) / 8;
-  constexpr int32_t mask = 0x7f;
 
   uint8_t sig_buf[max_sbytelen]{};
 
@@ -186,46 +188,36 @@ compress_sig(const int32_t* const __restrict poly_s,
       const size_t from_bit = bit_idx & 7ul;
 
       sig_buf[byte_idx] |= ((poly_s[coeff_idx] < 0) * 1) << (7 - from_bit);
-
       bit_idx += 1;
     }
 
     // encode low 7 -bits of coefficient
     {
-      const size_t byte_idx = bit_idx >> 3;
-      const size_t from_bit = bit_idx & 7ul;
-      const size_t writable_bits = 7 - from_bit + 1;
-      const bool flg0 = writable_bits <= 7;
-      const bool flg1 = writable_bits < 7;
+      const int32_t coeff = std::abs(poly_s[coeff_idx]);
+      for (size_t i = bit_idx; i < bit_idx + 7; i++) {
+        const size_t byte_idx = i >> 3;
+        const size_t from_bit = i & 7ul;
 
-      const int32_t selected = std::abs(poly_s[coeff_idx]) & mask;
-      const uint8_t patha = flg0 * (selected >> (7 - writable_bits));
-      const uint8_t pathb = !flg0 * (selected << 1);
-      const uint8_t pathc = flg1 * (selected << (writable_bits + 1));
-
-      sig_buf[byte_idx] |= patha | pathb;
-      sig_buf[byte_idx + flg1] |= pathc;
+        const uint8_t bit = (coeff >> (6 - (i - bit_idx))) & 0b1;
+        sig_buf[byte_idx] |= bit << (7 - from_bit);
+      }
 
       bit_idx += 7;
     }
 
     // encode high bits of coefficient, in unary code
     {
-      const size_t byte_idx = bit_idx >> 3;
-      const size_t from_bit = bit_idx & 7ul;
-
-      const size_t writable_bits = 7 - from_bit + 1;
       const size_t k = std::abs(poly_s[coeff_idx]) >> 7;
-      const bool flg = writable_bits < (k + 1);
+      for (size_t i = bit_idx; i < bit_idx + k; i++) {
+        const size_t byte_idx = i >> 3;
+        const size_t from_bit = i & 7ul;
 
-      const uint8_t coded = 0x80 >> k;
-      const uint8_t patha = coded >> from_bit;
-      const uint8_t pathb = flg * (coded << ((k + 1) - writable_bits));
+        sig_buf[byte_idx] |= 0 << (7 - from_bit);
+      }
 
-      sig_buf[byte_idx] |= patha;
-      sig_buf[byte_idx + flg] |= pathb;
-
-      bit_idx += (k + 1);
+      bit_idx += k;
+      sig_buf[bit_idx >> 3] |= 1 << (7 - (bit_idx & 7ul));
+      bit_idx += 1;
     }
 
     coeff_idx += 1;
