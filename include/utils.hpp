@@ -34,4 +34,18 @@ compute_skey_len()
          N;                         // F as bytes
 }
 
+// Compile-time compute Falcon{512, 1024} compressed signature byte length,
+// following table 3.3 of the specification.
+template<const size_t N>
+static inline constexpr size_t
+compute_sig_len()
+  requires((N == 512) || (N == 1024))
+{
+  if (N == 512) {
+    return 666;
+  } else {
+    return 1280;
+  }
+}
+
 }
