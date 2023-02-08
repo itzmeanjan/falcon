@@ -42,10 +42,14 @@ sign(benchmark::State& state)
     benchmark::ClobberMemory();
   }
 
+  const bool verified = falcon::verify<N>(pkey, msg, mlen, sig);
+
   std::free(pkey);
   std::free(skey);
   std::free(sig);
   std::free(msg);
+
+  assert(verified);
 }
 
 }
