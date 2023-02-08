@@ -51,6 +51,19 @@ add_to(ff::ff_t* const __restrict polya, const ff::ff_t* const __restrict polyb)
   }
 }
 
+// Given a degree N polynomial ( in its NTT form ), this routine performs
+// element wise negation over Z_q s.t. N = 2^log2n and q = 12289
+template<const size_t log2n>
+static inline void
+neg(ff::ff_t* const __restrict poly)
+{
+  constexpr size_t n = 1ul << log2n;
+
+  for (size_t i = 0; i < n; i++) {
+    poly[i] = -poly[i];
+  }
+}
+
 // Subtracts one degree-{(1 << lg2n) - 1} polynomial from another one, when both
 // them are in their FFT form, by performing element-wise subtraction over C
 template<const size_t lg2n>
