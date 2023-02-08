@@ -1,4 +1,5 @@
 #include "test/test_falcon.hpp"
+#include "test/test_signing.hpp"
 #include <iostream>
 
 int
@@ -55,6 +56,10 @@ main()
   test_falcon::test_sig_decompression<512>();
   test_falcon::test_sig_decompression<1024>();
   std::cout << "[test] Signature Compression/ Decompression\n";
+
+  test_falcon::test_keygen_sign_verify<512>();
+  test_falcon::test_keygen_sign_verify<1024>();
+  std::cout << "[test] Keygen -> Sign -> Verify\n";
 
   return EXIT_SUCCESS;
 }

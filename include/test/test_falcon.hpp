@@ -8,3 +8,4 @@
 #include "test_ntru_gen.hpp"
 #include "test_ntt.hpp"
 #include "test_samplerz.hpp"
+#include "test_signing.hpp"
