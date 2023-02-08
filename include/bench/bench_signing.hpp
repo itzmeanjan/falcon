@@ -42,6 +42,8 @@ sign(benchmark::State& state)
     benchmark::ClobberMemory();
   }
 
+  state.SetItemsProcessed(static_cast<int64_t>(state.iterations()));
+
   const bool verified = falcon::verify<N>(pkey, msg, mlen, sig);
 
   std::free(pkey);

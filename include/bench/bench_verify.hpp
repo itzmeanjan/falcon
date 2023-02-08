@@ -44,6 +44,8 @@ verify(benchmark::State& state)
     benchmark::ClobberMemory();
   }
 
+  state.SetItemsProcessed(static_cast<int64_t>(state.iterations()));
+
   std::free(pkey);
   std::free(skey);
   std::free(sig);
