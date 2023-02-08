@@ -41,15 +41,18 @@ verify(const ff::ff_t* const __restrict h,
   ff::ff_t c[N];
   hashing::hash_to_point<N>(salt, sizeof(salt), msg, mlen, c);
 
+  ff::ff_t h_[N];
+  std::memcpy(h_, h, sizeof(h_));
+
   ntt::ntt<log2<N>()>(c);
   ntt::ntt<log2<N>()>(s2_ntt);
-  ntt::ntt<log2<N>()>(h);
+  ntt::ntt<log2<N>()>(h_);
 
   ff::ff_t s1[N];
 
-  polynomial::mul<log2<N>()>(s2_ntt, h, s1); // s1 <- s2 * h ( mod q ) [NTT]
-  polynomial::neg<log2<N>()>(s1);            // s1 <- -s1 ( mod q ) [NTT]
-  polynomial::add_to<log2<N>()>(s1, c);      // s1 <- s1 + c ( mod q ) [NTT]
+  polynomial::mul<log2<N>()>(s2_ntt, h_, s1); // s1 <- s2 * h ( mod q ) [NTT]
+  polynomial::neg<log2<N>()>(s1);             // s1 <- -s1 ( mod q ) [NTT]
+  polynomial::add_to<log2<N>()>(s1, c);       // s1 <- s1 + c ( mod q ) [NTT]
 
   ntt::intt<log2<N>()>(s1); // s1 <- c - s2*h ( mod q ) [Coeff]
 
