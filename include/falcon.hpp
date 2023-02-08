@@ -2,6 +2,7 @@
 #include "encoding.hpp"
 #include "fft.hpp"
 #include "keygen.hpp"
+#include "signing.hpp"
 
 // Falcon{512, 1024} Key Generation, Signing and Verification Algorithm
 namespace falcon {
@@ -126,6 +127,38 @@ compute_falcon_tree(
 
   falcon_tree::ffldl<N, 0, log2<N>()>(gram_matrix, T);
   falcon_tree::normalize_tree<N, 0, log2<N>()>(T, σ);
+}
+
+// Given a 2x2 matrix B ( in its FFT form ) s.t. B = [[g, -f], [G, -F]], falcon
+// tree T ( in its FFT representation ) and message M of mlen -bytes, this
+// routine computes a compressed Falcon{512, 1024} signature, following
+// algorithm 10 of falcon specification.
+//
+// Note, compressed falcon signature doesn't include message bytes, looks like
+//
+// <1 -byte header> +
+// <40 -bytes random salt> +
+// <r -bytes compressed signature> s.t. r = (666 - 41) if N = 512
+//                                      r = (1280 - 41) else if N = 1024
+template<const size_t N>
+static inline void
+sign(const fft::cmplx* const __restrict B, // 2x2 matrix [[g, -f], [G, -F]]
+     const fft::cmplx* const __restrict T, // Falcon Tree ( in FFT form )
+     const uint8_t* const __restrict msg,  // message to be signed
+     const size_t mlen,                    // = len(msg), in bytes
+     uint8_t* const __restrict sig         // compressed falcon signature
+     )
+  requires((N == 512) || (N == 1024))
+{
+  constexpr int32_t β2_values[]{ 34034726, 70265242 };
+  constexpr size_t slen_values[]{ 666, 1280 };
+  constexpr double σ_min_values[]{ 1.277833697, 1.298280334 };
+
+  constexpr int32_t β2 = β2_values[N == 1024];
+  constexpr size_t slen = slen_values[N == 1024];
+  constexpr double σ_min = σ_min_values[N == 1024];
+
+  signing::sign<N, β2, slen>(B, T, msg, mlen, sig, σ_min);
 }
 
 }
