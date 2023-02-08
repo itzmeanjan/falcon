@@ -1,8 +1,11 @@
 #pragma once
+#include "common.hpp"
+#include "decoding.hpp"
 #include "encoding.hpp"
 #include "fft.hpp"
 #include "keygen.hpp"
 #include "signing.hpp"
+#include <cstddef>
 
 // Falcon{512, 1024} Key Generation, Signing and Verification Algorithm
 namespace falcon {
@@ -140,6 +143,11 @@ compute_falcon_tree(
 // <40 -bytes random salt> +
 // <r -bytes compressed signature> s.t. r = (666 - 41) if N = 512
 //                                      r = (1280 - 41) else if N = 1024
+//
+// Because this routine expects you to compute matrix B and falcon tree T, it
+// can be useful when you need to sign many messages one after another. If
+// you're interested in signing just a single message, it's better idea to use
+// sign function living just below this.
 template<const size_t N>
 static inline void
 sign(const fft::cmplx* const __restrict B, // 2x2 matrix [[g, -f], [G, -F]]
@@ -159,6 +167,45 @@ sign(const fft::cmplx* const __restrict B, // 2x2 matrix [[g, -f], [G, -F]]
   constexpr double σ_min = σ_min_values[N == 1024];
 
   signing::sign<N, β2, slen>(B, T, msg, mlen, sig, σ_min);
+}
+
+// [User Friendly API] Falcon{512, 1024} message signing algorithm, takes
+// following inputs
+//
+// - Byte encoded secret key
+// - Message of length mlen -bytes, which is to be signed
+//
+// This routine computes compressed signature bytes. Note, this routine can be
+// easy to use, but not ideal when performance is a priority. Rather you want to
+// seperately compute matrix B and falcon tree T, which you can pass to
+// underlying sign helper routine for signing message. That will be desirable
+// when one signs many messages - one after another say. But for single shot
+// usecases, where secret key is loaded into memory just to sign a single
+// message, one might prefer using this routine.
+template<const size_t N>
+static inline bool
+sign(const uint8_t* const __restrict skey,
+     const uint8_t* const __restrict msg,
+     const size_t mlen,
+     uint8_t* const __restrict sig)
+  requires((N == 512) || (N == 1024))
+{
+  int32_t f[N];
+  int32_t g[N];
+  int32_t F[N];
+  int32_t G[N];
+  fft::cmplx B[2 * 2 * N];
+  fft::cmplx T[(1ul << log2<N>()) * (log2<N>() + 1)];
+
+  const bool success = decoding::decode_skey<N>(skey, f, g, F);
+  if (!success) [[unlikely]] {
+    return success;
+  }
+
+  recompute_G<N>(f, g, F, G);
+  compute_matrix_B<N>(f, g, F, G, B);
+  compute_falcon_tree<N>(B, T);
+  sign<N>(B, T, msg, mlen, sig);
 }
 
 }
