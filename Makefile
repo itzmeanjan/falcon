@@ -20,7 +20,7 @@ bench/a.out: bench/main.cpp include/*.hpp include/bench/*.hpp
 	$(CXX) $(CXXFLAGS) $(OPTFLAGS) $(IFLAGS) $(DEP_IFLAGS) $< -o $@ $(LFLAGS) -lbenchmark
 
 benchmark: bench/a.out
-    ./$< --benchmark_time_unit=us --benchmark_counters_tabular=true
+	./$< --benchmark_time_unit=us --benchmark_counters_tabular=true
 
 clean:
 	find . -name '*.out' -o -name '*.o' -o -name '*.so' -o -name '*.gch' | xargs rm -rf
