@@ -7,7 +7,7 @@ namespace bench_falcon {
 
 // Benchmark Falcon{512, 1024} keypair generation algorithm.
 //
-// Note, this API neither builds matrix B nor Falcon tree T, which are
+// Note, this keygen API neither builds matrix B nor Falcon tree T, which are
 // required for Falcon message signing.
 template<const size_t N>
 void

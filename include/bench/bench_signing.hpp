@@ -8,8 +8,8 @@ namespace bench_falcon {
 
 // Benchmark Falcon{512, 1024} message signing algorithm.
 //
-// Note, this API builds matrix B and falcon tree T, everytime it's asked to
-// sign a message, by decoding Falcon secret key.
+// Note, this signing API builds matrix B and falcon tree T, everytime it's
+// asked to sign a message, by decoding Falcon secret key.
 template<const size_t N>
 void
 sign(benchmark::State& state)
