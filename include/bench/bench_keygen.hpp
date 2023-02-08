@@ -5,9 +5,10 @@
 // Benchmark Falcon PQC suite implementation
 namespace bench_falcon {
 
-// Benchmark Falcon{512, 1024} keypair generation algorithm. Note, this API does
-// neither build matrix B nor falcon tree T, which are required for falcon
-// signing.
+// Benchmark Falcon{512, 1024} keypair generation algorithm.
+//
+// Note, this API neither builds matrix B nor Falcon tree T, which are
+// required for Falcon message signing.
 template<const size_t N>
 void
 keygen(benchmark::State& state)
