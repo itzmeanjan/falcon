@@ -2,9 +2,11 @@
 #include "common.hpp"
 #include "decoding.hpp"
 #include "encoding.hpp"
+#include "ff.hpp"
 #include "fft.hpp"
 #include "keygen.hpp"
 #include "signing.hpp"
+#include "verification.hpp"
 #include <cstddef>
 
 // Falcon{512, 1024} Key Generation, Signing and Verification Algorithm
@@ -197,15 +199,50 @@ sign(const uint8_t* const __restrict skey,
   fft::cmplx B[2 * 2 * N];
   fft::cmplx T[(1ul << log2<N>()) * (log2<N>() + 1)];
 
-  const bool success = decoding::decode_skey<N>(skey, f, g, F);
-  if (!success) [[unlikely]] {
-    return success;
+  const bool decoded = decoding::decode_skey<N>(skey, f, g, F);
+  if (!decoded) [[unlikely]] {
+    return decoded;
   }
 
   recompute_G<N>(f, g, F, G);
   compute_matrix_B<N>(f, g, F, G, B);
   compute_falcon_tree<N>(B, T);
   sign<N>(B, T, msg, mlen, sig);
+
+  return true;
+}
+
+// [User Friendly API] Falcon{512, 1024} signature verification algorithm takes
+// following inputs
+//
+// - Byte encoded public key
+// - Message of mlen -bytes ( which was signed )
+// - Compressed message signature
+//
+// This routine verifies compressed falcon signature, following algorithm 16 of
+// falcon specification. Note, if you're verifying many messages, it can be
+// better idea to keep public key loaded into memory as degree N polynomial h (
+// over Z_q | q = 12289 ) and use underlying verify routine ( which is called
+// from this function ), living in verification.hpp header file.
+template<const size_t N>
+static inline bool
+verify(const uint8_t* const __restrict pkey,
+       const uint8_t* const __restrict msg,
+       const size_t mlen,
+       uint8_t* const __restrict sig)
+  requires((N == 512) || (N == 1024))
+{
+  ff::ff_t h[N];
+
+  const size_t decoded = decoding::decode_pkey<N>(pkey, h);
+  if (!decoded) [[unlikely]] {
+    return decoded;
+  }
+
+  constexpr int32_t β2_values[]{ 34034726, 70265242 };
+  constexpr int32_t β2 = β2_values[N == 1024];
+
+  return verification::verify<N, β2>(h, msg, mlen, sig);
 }
 
 }

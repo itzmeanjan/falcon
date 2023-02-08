@@ -30,7 +30,7 @@ verify(const ff::ff_t* const __restrict h,
 
   const size_t decoded = decoding::decode_sig<N>(sig, salt, s2);
   if (!decoded) [[unlikely]] {
-    return false;
+    return decoded;
   }
 
   ff::ff_t s2_ntt[N];
