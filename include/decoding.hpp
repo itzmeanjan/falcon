@@ -277,4 +277,34 @@ decompress_sig(const uint8_t* const __restrict sig,
   return !failed;
 }
 
+// Given a byte encoded ( and compressed ) Falcon{512, 1024} signature, this
+// routine decodes it into 40 -bytes salt and degree N polynomial s2 ( by
+// decompressing ).
+//
+// In case of successful signature decoding, this routine returns boolean truth
+// value, otherwise it returns false.
+template<const size_t N>
+static inline bool
+decode_sig(const uint8_t* const __restrict sig,
+           uint8_t* const __restrict salt,
+           int32_t* const __restrict s2)
+  requires((N == 512) || (N == 1024))
+{
+  constexpr uint8_t header = 0x30 | static_cast<uint8_t>(log2<N>());
+  constexpr size_t slen_values[]{ 666, 1280 };
+  constexpr size_t slen = slen_values[N == 1024];
+
+  if (sig[0] != header) [[unlikely]] {
+    return false;
+  }
+
+  const bool decompressed = decompress_sig<N, slen>(sig, s2);
+  if (!decompressed) [[unlikely]] {
+    return false;
+  }
+
+  std::memcpy(salt, sig + 1, 40);
+  return true;
+}
+
 }
