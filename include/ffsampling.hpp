@@ -1,6 +1,7 @@
 #pragma once
 #include "falcon_tree.hpp"
 #include "polynomial.hpp"
+#include "prng.hpp"
 #include "samplerz.hpp"
 
 // Fast Fourier Sampling
@@ -20,7 +21,8 @@ ff_sampling(const fft::cmplx* const __restrict t0,
             const fft::cmplx* const __restrict T,
             const double σ_min,
             fft::cmplx* const __restrict z0,
-            fft::cmplx* const __restrict z1)
+            fft::cmplx* const __restrict z1,
+            prng::prng_t& rng)
   requires((N > 0) && ((N & (N - 1)) == 0) && (N <= 1024) &&
            (AT_LEVEL <= T_HEIGHT) && (N == (1ul << (T_HEIGHT - AT_LEVEL))))
 {
@@ -32,8 +34,8 @@ ff_sampling(const fft::cmplx* const __restrict t0,
     static_assert(AT_LEVEL == T_HEIGHT, "Can't go below leaf level of tree !");
 
     const double σ_prime = T[0].real();
-    const auto z0_ = samplerz::samplerz(t0[0].real(), σ_prime, σ_min);
-    const auto z1_ = samplerz::samplerz(t1[0].real(), σ_prime, σ_min);
+    const auto z0_ = samplerz::samplerz(t0[0].real(), σ_prime, σ_min, rng);
+    const auto z1_ = samplerz::samplerz(t1[0].real(), σ_prime, σ_min, rng);
 
     z0[0] = fft::cmplx{ static_cast<double>(z0_) };
     z1[0] = fft::cmplx{ static_cast<double>(z1_) };
@@ -41,6 +43,9 @@ ff_sampling(const fft::cmplx* const __restrict t0,
     return;
   } else {
     static_assert(AT_LEVEL < T_HEIGHT, "Can go to leaf level !");
+
+    constexpr auto nby2 = N / 2;
+    constexpr auto nlvl = AT_LEVEL + 1; // next level of tree
 
     const auto l = T;
     const auto Tl = T + tree_off;
@@ -54,7 +59,7 @@ ff_sampling(const fft::cmplx* const __restrict t0,
     fft::cmplx t1_1[N / 2];
 
     fft::split_fft<log2<N>()>(t1, t1_0, t1_1);
-    ff_sampling<N / 2, AT_LEVEL + 1, T_HEIGHT>(t1_0, t1_1, Tr, σ_min, z0r, z1r);
+    ff_sampling<nby2, nlvl, T_HEIGHT>(t1_0, t1_1, Tr, σ_min, z0r, z1r, rng);
 
     fft::cmplx merged_z1[N];
     fft::merge_fft<log2<N>()>(z0r, z1r, merged_z1);
@@ -71,7 +76,7 @@ ff_sampling(const fft::cmplx* const __restrict t0,
     fft::cmplx t0_1[N / 2];
 
     fft::split_fft<log2<N>()>(tmp0, t0_0, t0_1);
-    ff_sampling<N / 2, AT_LEVEL + 1, T_HEIGHT>(t0_0, t0_1, Tl, σ_min, z0l, z1l);
+    ff_sampling<nby2, nlvl, T_HEIGHT>(t0_0, t0_1, Tl, σ_min, z0l, z1l, rng);
 
     fft::cmplx merged_z0[N];
     fft::merge_fft<log2<N>()>(z0l, z1l, merged_z0);

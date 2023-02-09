@@ -3,6 +3,7 @@
 #include "encoding.hpp"
 #include "falcon.hpp"
 #include "ntru_gen.hpp"
+#include "prng.hpp"
 #include "test_ntru_gen.hpp"
 #include <cassert>
 #include <cstdlib>
@@ -33,9 +34,10 @@ test_keygen()
   auto F_ = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
   auto G_ = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
   auto skey = static_cast<uint8_t*>(std::malloc(sklen));
+  prng::prng_t rng;
 
   // Generate f, g, F and G
-  ntru_gen::ntru_gen<N>(f, g, F, G);
+  ntru_gen::ntru_gen<N>(f, g, F, G, rng);
   // Encode f, g and F
   encoding::encode_skey<N>(f, g, F, skey);
   // Deserialize f, g and F

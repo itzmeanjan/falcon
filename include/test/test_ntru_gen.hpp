@@ -1,5 +1,6 @@
 #pragma once
 #include "ntru_gen.hpp"
+#include "prng.hpp"
 #include <cassert>
 
 // Test functional correctness of Falcon PQC suite implementation
@@ -85,7 +86,8 @@ test_ntru_gen()
   auto F = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
   auto G = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
 
-  ntru_gen::ntru_gen<N>(f, g, F, G);
+  prng::prng_t rng;
+  ntru_gen::ntru_gen<N>(f, g, F, G, rng);
   const bool flg = check_ntru_eq<N>(f, g, F, G);
 
   std::free(f);

@@ -5,6 +5,7 @@
 #include "ff.hpp"
 #include "fft.hpp"
 #include "keygen.hpp"
+#include "prng.hpp"
 #include "signing.hpp"
 #include "verification.hpp"
 #include <cstddef>
@@ -34,8 +35,9 @@ keygen(uint8_t* const __restrict pkey, uint8_t* const __restrict skey)
   int32_t F[N];
   int32_t G[N];
   ff::ff_t h[N];
+  prng::prng_t rng;
 
-  ntru_gen::ntru_gen<N>(f, g, F, G);
+  ntru_gen::ntru_gen<N>(f, g, F, G, rng);
   keygen::compute_public_key<N>(f, g, h);
   encoding::encode_pkey<N>(h, pkey);
   encoding::encode_skey<N>(f, g, F, skey);
@@ -156,8 +158,8 @@ sign(const fft::cmplx* const __restrict B, // 2x2 matrix [[g, -f], [G, -F]]
      const fft::cmplx* const __restrict T, // Falcon Tree ( in FFT form )
      const uint8_t* const __restrict msg,  // message to be signed
      const size_t mlen,                    // = len(msg), in bytes
-     uint8_t* const __restrict sig         // compressed falcon signature
-     )
+     uint8_t* const __restrict sig,        // compressed falcon signature
+     prng::prng_t& rng)
   requires((N == 512) || (N == 1024))
 {
   constexpr int32_t β2_values[]{ 34034726, 70265242 };
@@ -168,7 +170,7 @@ sign(const fft::cmplx* const __restrict B, // 2x2 matrix [[g, -f], [G, -F]]
   constexpr size_t slen = slen_values[N == 1024];
   constexpr double σ_min = σ_min_values[N == 1024];
 
-  signing::sign<N, β2, slen>(B, T, msg, mlen, sig, σ_min);
+  signing::sign<N, β2, slen>(B, T, msg, mlen, sig, σ_min, rng);
 }
 
 // [User Friendly API] Falcon{512, 1024} message signing algorithm, takes
@@ -198,6 +200,7 @@ sign(const uint8_t* const __restrict skey,
   int32_t G[N];
   fft::cmplx B[2 * 2 * N];
   fft::cmplx T[(1ul << log2<N>()) * (log2<N>() + 1)];
+  prng::prng_t rng;
 
   const bool decoded = decoding::decode_skey<N>(skey, f, g, F);
   if (!decoded) [[unlikely]] {
@@ -207,7 +210,7 @@ sign(const uint8_t* const __restrict skey,
   recompute_G<N>(f, g, F, G);
   compute_matrix_B<N>(f, g, F, G, B);
   compute_falcon_tree<N>(B, T);
-  sign<N>(B, T, msg, mlen, sig);
+  sign<N>(B, T, msg, mlen, sig, rng);
 
   return true;
 }
