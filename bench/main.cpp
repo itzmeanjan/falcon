@@ -1,4 +1,8 @@
 #include "bench/bench_falcon.hpp"
+#include "bench/bench_samplerz.hpp"
+
+// register for benchmarking sampler over the integers ( Z )
+BENCHMARK(bench_falcon::samplerz);
 
 // register for benchmarking Falcon512
 BENCHMARK(bench_falcon::keygen<512>);
