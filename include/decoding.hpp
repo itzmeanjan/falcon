@@ -249,26 +249,13 @@ decompress_sig(const uint8_t* const __restrict sig,
     int32_t coeff = 0;
     uint8_t sign_bit = 0;
 
-    // extract sign bit
+    // extracts sign bit and low ( least significant ) 7 bits of coefficient
     {
-      const size_t byte_idx = bit_idx >> 3;
-      const size_t from_bit = bit_idx & 7ul;
+      const uint8_t res = extract_8_contiguous_bits(sig, bit_idx);
 
-      sign_bit = (sig[byte_idx] >> (7 - from_bit)) & 0b1;
-      bit_idx += 1;
-    }
-
-    // extract next 7 bits, which are low bits of coefficient
-    {
-      for (size_t i = bit_idx; i < bit_idx + 7; i++) {
-        const size_t byte_idx = i >> 3;
-        const size_t from_bit = i & 7ul;
-
-        const uint8_t bit = (sig[byte_idx] >> (7 - from_bit)) & 0b1;
-        coeff |= static_cast<int32_t>(bit << (6 - (i - bit_idx)));
-      }
-
-      bit_idx += 7;
+      sign_bit = res >> 7; // sign bit
+      coeff = res & 0x7f;  // low 7 bits of coefficient
+      bit_idx += 8;
     }
 
     // extract high bits of coefficient, which was encoded using unary code
