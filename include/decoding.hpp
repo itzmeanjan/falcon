@@ -291,22 +291,31 @@ decompress_sig(const uint8_t* const __restrict sig,
 
     // extract high bits of coefficient, which was encoded using unary code
     {
-      size_t k = 0;
+      size_t k = std::countl_zero(extract_8_contiguous_bits(sig, bit_idx));
+      if (k < 8) [[likely]] {
+        coeff += (1 << 7) * k;
+        bit_idx += k;
+      } else {
+        bit_idx += k;
+        for (; bit_idx < slen;) {
+          const auto ebits = std::min(8ul, slen - bit_idx);
 
-      for (size_t i = bit_idx; i < slen; i++) {
-        const size_t byte_idx = i >> 3;
-        const size_t from_bit = i & 7ul;
+          size_t v = 0;
+          if (ebits < 8) {
+            const auto t = extract_rem_contiguous_bits_in_byte(sig, bit_idx);
+            v = std::countl_zero(t);
+          } else {
+            const auto t = extract_8_contiguous_bits(sig, bit_idx);
+            v = std::countl_zero(t);
+          }
+          k += v;
+          bit_idx += ebits;
 
-        const uint8_t bit = (sig[byte_idx] >> (7 - from_bit)) & 0b1;
-        if (bit != 0) {
-          break;
+          if (v < ebits) {
+            break;
+          }
         }
-
-        k += 1;
       }
-
-      coeff += (1 << 7) * k;
-      bit_idx += k;
     }
 
     // recompute coefficient s_i
@@ -328,14 +337,20 @@ decompress_sig(const uint8_t* const __restrict sig,
   // enforce trailing bits are 0
   failed |= (bit_idx >= slen) | (coeff_idx < N);
   if (!failed) {
-    while (bit_idx < slen) {
-      const size_t byte_idx = bit_idx >> 3;
-      const size_t from_bit = bit_idx & 7ul;
+    for (; bit_idx < slen;) {
+      const size_t ebits = std::min(8ul, slen - bit_idx);
 
-      const uint8_t bit = (sig[byte_idx] >> (7 - from_bit)) & 0b1;
-      failed |= (bit != 0);
+      size_t v = 0;
+      if (ebits == 8) [[likely]] {
+        const auto t = extract_8_contiguous_bits(sig, bit_idx);
+        v = std::countl_zero(t);
+      } else {
+        const auto t = extract_rem_contiguous_bits_in_byte(sig, bit_idx);
+        v = std::countl_zero(t);
+      }
 
-      bit_idx += 1;
+      bit_idx += ebits;
+      failed |= (v < ebits);
     }
   }
 
