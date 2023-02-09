@@ -170,6 +170,54 @@ decode_skey(const uint8_t* const __restrict skey,
   return true;
 }
 
+// Given a byte array, this routine extracts out 8 contiguous bits from given
+// bit index ( bitoff ).
+//
+// Imagine we've a byte array of length N (>=2) s.t. bits inside each byte are
+// enumerated as following
+//
+// b0,b1,b2,b3,b4,b5,b6,b7 | b0,b1,b2,b3,b4,b5,b6,b7 | ...
+// ---------------------- | ----------------------- | ...
+//      byte 0           |        byte 1           | ...
+//
+// b0 <- most significant bit
+// b7 <- least significant bit
+//
+// Now think we're asked to extract out 8 contiguous bits. starting from bit
+// index 5, then we'll figure
+//
+// - we're starting from byte index 0 ( = 5/ 8  )
+// - we should start accessing from bit index 5 ( = 5% 8 ) of byte index 0
+// - first we'll take 3 least significant bits of byte index 0
+// - finally we'll take 5 most significant bits of byte index 1
+// - that forms out uint8_t return value, holding 8 contiguous bits of interest
+//
+// If we're asked to extract 8 contigous bits, starting from bit index 11, then
+// we should figure
+//
+// - start from byte index 1 ( = 11/ 8 )
+// - start from bit index 3 ( = 11% 8 ) of byte index 1
+// - take 5 least significant bits of byte index 1
+// - and take 3 most significant bits of byte index 2
+//
+// Now notice, if we're working with a byte array of length 2 and we're asked to
+// extract 8 contiguous bits, starting from bit index 11, we will access memory
+// location which we're not supposed to be. So it's caller's responsibility to
+// ensure that atleast 2 consecutive memory locations ( i.e. bytes ) can be
+// accessed, starting from byte index (bitoff / 8).
+static inline constexpr uint8_t
+extract_8_contiguous_bits(const uint8_t* const __restrict bytes,
+                          const size_t bitoff)
+{
+  const size_t byte_at = bitoff >> 3;
+  const size_t bit_at = bitoff & 7ul;
+
+  const uint16_t word = (static_cast<uint16_t>(bytes[byte_at]) << 8) |
+                        static_cast<uint16_t>(bytes[byte_at + 1]);
+
+  return static_cast<uint8_t>(word >> (8 - bit_at));
+}
+
 // Given compressed signature bytes, this routine attempts to decompress it back
 // to a degree N polynomial s.t. coefficients ∈ Z[x] and they are distributed
 // around 0, using algorithm 18 of Falcon specification
