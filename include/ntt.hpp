@@ -143,7 +143,7 @@ ntt(ff::ff_t* const __restrict poly)
         const auto tmp = ζ_exp * poly[i + len];
 
         poly[i + len] = poly[i] - tmp;
-        poly[i] = poly[i] + tmp;
+        poly[i] += tmp;
       }
     }
   }
@@ -183,18 +183,18 @@ intt(ff::ff_t* const __restrict poly)
       for (size_t i = start; i < start + len; i++) {
         const auto tmp = poly[i];
 
-        poly[i] = poly[i] + poly[i + len];
+        poly[i] += poly[i + len];
         poly[i + len] = tmp - poly[i + len];
-        poly[i + len] = poly[i + len] * neg_ζ_exp;
+        poly[i + len] *= neg_ζ_exp;
       }
     }
   }
 
   for (size_t i = 0; i < N; i++) {
     if constexpr (LOG2N == FALCON512_LOG2N) {
-      poly[i] = poly[i] * INV_FALCON512_N;
+      poly[i] *= INV_FALCON512_N;
     } else {
-      poly[i] = poly[i] * INV_FALCON1024_N;
+      poly[i] *= INV_FALCON1024_N;
     }
   }
 }
