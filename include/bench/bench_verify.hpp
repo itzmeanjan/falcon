@@ -1,5 +1,6 @@
 #pragma once
 #include "falcon.hpp"
+#include "prng.hpp"
 #include <benchmark/benchmark.h>
 #include <cassert>
 
@@ -25,9 +26,10 @@ verify(benchmark::State& state)
   auto skey = static_cast<uint8_t*>(std::malloc(sklen));
   auto sig = static_cast<uint8_t*>(std::malloc(siglen));
   auto msg = static_cast<uint8_t*>(std::malloc(mlen));
+  prng::prng_t rng;
 
   falcon::keygen<N>(pkey, skey);
-  random_fill(msg, mlen);
+  rng.read(msg, mlen);
   const bool _signed = falcon::sign<N>(skey, msg, mlen, sig);
   assert(_signed);
 

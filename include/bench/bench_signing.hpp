@@ -1,5 +1,6 @@
 #pragma once
 #include "falcon.hpp"
+#include "prng.hpp"
 #include <benchmark/benchmark.h>
 #include <cassert>
 
@@ -26,9 +27,10 @@ sign_single(benchmark::State& state)
   auto skey = static_cast<uint8_t*>(std::malloc(sklen));
   auto sig = static_cast<uint8_t*>(std::malloc(siglen));
   auto msg = static_cast<uint8_t*>(std::malloc(mlen));
+  prng::prng_t rng;
 
   falcon::keygen<N>(pkey, skey);
-  random_fill(msg, mlen);
+  rng.read(msg, mlen);
 
   for (auto _ : state) {
     const bool _signed = falcon::sign<N>(skey, msg, mlen, sig);
@@ -86,18 +88,20 @@ sign_many(benchmark::State& state)
   auto h = static_cast<ff::ff_t*>(std::malloc(sizeof(ff::ff_t) * N));
   auto sig = static_cast<uint8_t*>(std::malloc(siglen));
   auto msg = static_cast<uint8_t*>(std::malloc(mlen));
+  prng::prng_t rng;
 
-  keygen::keygen<N>(B, T, h, σ);
-  random_fill(msg, mlen);
+  keygen::keygen<N>(B, T, h, σ, rng);
+  rng.read(msg, mlen);
 
   for (auto _ : state) {
-    falcon::sign<N>(B, T, msg, mlen, sig);
+    falcon::sign<N>(B, T, msg, mlen, sig, rng);
 
     benchmark::DoNotOptimize(B);
     benchmark::DoNotOptimize(T);
     benchmark::DoNotOptimize(msg);
     benchmark::DoNotOptimize(mlen);
     benchmark::DoNotOptimize(sig);
+    benchmark::DoNotOptimize(rng);
     benchmark::ClobberMemory();
   }
 
