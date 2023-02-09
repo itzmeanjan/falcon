@@ -218,6 +218,37 @@ extract_8_contiguous_bits(const uint8_t* const __restrict bytes,
   return static_cast<uint8_t>(word >> (8 - bit_at));
 }
 
+// Given a byte array and starting bit index, this routine extracts out next n
+// contiguous bits s.t. n <= 8 and no bits from next byte is ever touched i.e.
+// only bits living at starting byte index are extracted out.
+//
+// Lets take an example, say we've a byte array which looks like following, when
+// bits are enumerated
+//
+// b0,b1,b2,b3,b4,b5,b6,b7 | b0,b1,b2,b3,b4,b5,b6,b7 / ...
+// ---------------------- | ----------------------- / ...
+//      byte 0           |        byte 1           / ...
+//
+// b0 <- most significant bit
+// b7 <- least significant bit
+//
+// Now I want to extract all remaining bits starting from bit index 12, so I
+// figure
+//
+// - starting byte index = 12/ 8 = 1
+// - starting bit index inside byte index 1 = 12% 8 = 4
+// - remaining bits in byte index 1 = 7 - 4 + 1 = 4
+// - extracts out <b4,b5,b6,b7> of byte index 1 as <b4,b5,b6,b7,0,0,0,0>
+static inline constexpr uint8_t
+extract_rem_contiguous_bits_in_byte(const uint8_t* const __restrict bytes,
+                                    const size_t bitoff)
+{
+  const size_t byte_at = bitoff >> 3;
+  const size_t bit_at = bitoff & 7ul;
+
+  return bytes[byte_at] << bit_at;
+}
+
 // Given compressed signature bytes, this routine attempts to decompress it back
 // to a degree N polynomial s.t. coefficients ∈ Z[x] and they are distributed
 // around 0, using algorithm 18 of Falcon specification
