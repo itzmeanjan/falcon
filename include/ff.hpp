@@ -66,7 +66,14 @@ struct ff_t
   uint16_t v = 0u;
 
   // Construct field element, holding canonical value _v % Q
-  inline constexpr ff_t(const uint16_t _v = 0) { v = _v % Q; }
+  inline constexpr ff_t(const uint16_t _v = 0)
+  {
+    if (_v < Q) [[likely]] {
+      v = _v;
+    } else {
+      v = _v % Q;
+    }
+  }
 
   // Construct field element, holding canonical value 0
   static inline constexpr ff_t zero() { return ff_t{ 0 }; }
@@ -75,7 +82,7 @@ struct ff_t
   static inline constexpr ff_t one() { return ff_t{ 1 }; }
 
   // Addition over prime field Z_q
-  constexpr ff_t operator+(const ff_t& rhs) const
+  inline constexpr ff_t operator+(const ff_t& rhs) const
   {
     const uint16_t t0 = this->v + rhs.v;
     const bool flg = t0 >= Q;
@@ -86,7 +93,7 @@ struct ff_t
 
   // Adds one Z_q element with another one, while mutating the first one i.e.
   // compound addition operation
-  constexpr void operator+=(const ff_t& rhs)
+  inline constexpr void operator+=(const ff_t& rhs)
   {
     const uint16_t t0 = this->v + rhs.v;
     const bool flg = t0 >= Q;
@@ -96,14 +103,14 @@ struct ff_t
   }
 
   // Subtraction over prime field Z_q
-  constexpr ff_t operator-(const ff_t& rhs) const
+  inline constexpr ff_t operator-(const ff_t& rhs) const
   {
     const ff_t t0 = -rhs;
     return *this + t0;
   }
 
   // Negation over prime field Z_q
-  constexpr ff_t operator-() const
+  inline constexpr ff_t operator-() const
   {
     const uint16_t tmp = Q - this->v;
     return ff_t{ tmp };
@@ -134,6 +141,31 @@ struct ff_t
     return ff_t{ t7 };
   }
 
+  // Compound Multiplication over prime field Z_q
+  //
+  // Note, after multiplying two 14 -bit numbers resulting 28 -bit number is
+  // reduced to Z_q using Barrett reduction algorithm, which avoid division by
+  // any value which is not power of 2 | q = 12289.
+  //
+  // See https://www.nayuki.io/page/barrett-reduction-algorithm for Barrett
+  // reduction algorithm
+  inline constexpr void operator*=(const ff_t& rhs)
+  {
+    const uint32_t t0 = static_cast<uint32_t>(this->v);
+    const uint32_t t1 = static_cast<uint32_t>(rhs.v);
+    const uint32_t t2 = t0 * t1;
+
+    const uint64_t t3 = static_cast<uint64_t>(t2) * static_cast<uint64_t>(R);
+    const uint32_t t4 = static_cast<uint32_t>(t3 >> 28);
+    const uint32_t t5 = t4 * static_cast<uint32_t>(Q);
+    const uint16_t t6 = static_cast<uint16_t>(t2 - t5);
+
+    const bool flg = t6 >= Q;
+    const uint16_t t7 = t6 - flg * Q;
+
+    this->v = t7;
+  }
+
   // Multiplicative inverse over prime field Z_q
   //
   // Say input is a & return value of this function is b, then
@@ -146,7 +178,7 @@ struct ff_t
   //
   // Taken from
   // https://github.com/itzmeanjan/kyber/blob/3cd41a5/include/ff.hpp#L190-L216
-  constexpr ff_t inv() const
+  inline constexpr ff_t inv() const
   {
     const bool flg0 = this->v == 0;
     const uint16_t t0 = this->v + flg0 * 1;
@@ -164,7 +196,7 @@ struct ff_t
   }
 
   // Division over prime field Z_q
-  constexpr ff_t operator/(const ff_t& rhs) const
+  inline constexpr ff_t operator/(const ff_t& rhs) const
   {
     return (*this) * rhs.inv();
   }
@@ -174,7 +206,7 @@ struct ff_t
   //
   // Taken from
   // https://github.com/itzmeanjan/kyber/blob/3cd41a5/include/ff.hpp#L224-L246
-  constexpr ff_t operator^(const size_t n) const
+  inline constexpr ff_t operator^(const size_t n) const
   {
     ff_t base = *this;
 
