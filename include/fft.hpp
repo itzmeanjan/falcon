@@ -1172,7 +1172,8 @@ split_fft(const cmplx* const __restrict f,
   constexpr size_t hN = N >> 1;
 
   for (size_t i = 0; i < hN; i++) {
-    const auto ζ_exp = computeζ<N>(bit_rev<LOG2N>(hN + i));
+    // Can also be computed using computeζ<N>(bit_rev<LOG2N>(hN + i))
+    const auto ζ_exp = POWERS_OF_ζ[hN + i];
 
     f0[i] = 0.5 * (f[2 * i] + f[2 * i + 1]);
     f1[i] = 0.5 * (f[2 * i] - f[2 * i + 1]) * std::conj(ζ_exp);
@@ -1195,7 +1196,8 @@ merge_fft(const cmplx* const __restrict f0,
   constexpr size_t hN = N >> 1;
 
   for (size_t i = 0; i < hN; i++) {
-    const auto ζ_exp = computeζ<N>(bit_rev<LOG2N>(hN + i));
+    // Can also be computed using computeζ<N>(bit_rev<LOG2N>(hN + i))
+    const auto ζ_exp = POWERS_OF_ζ[hN + i];
 
     f[2 * i + 0] = f0[i] + f1[i] * ζ_exp;
     f[2 * i + 1] = f0[i] - f1[i] * ζ_exp;
