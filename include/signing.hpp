@@ -7,6 +7,7 @@
 #include "hashing.hpp"
 #include "ntru_gen.hpp"
 #include "polynomial.hpp"
+#include "prng.hpp"
 #include <cstring>
 
 // Falcon{512, 1024} Signing related Routines
@@ -33,8 +34,8 @@ sign(const fft::cmplx* const __restrict B,
      const uint8_t* const __restrict msg,
      const size_t mlen,
      uint8_t* const __restrict sig,
-     const double σ_min // see table 3.3 of falcon specification
-     )
+     const double σ_min, // see table 3.3 of falcon specification
+     prng::prng_t& rng)
   requires(((N == 512) && (β2 == 34034726) && (slen == 666)) ||
            ((N == 1024) && (β2 == 70265242) && (slen == 1280)))
 {
@@ -42,7 +43,7 @@ sign(const fft::cmplx* const __restrict B,
   constexpr double β2_ = static_cast<double>(β2);
 
   uint8_t salt[40];
-  random_fill(salt, sizeof(salt));
+  rng.read(salt, sizeof(salt));
 
   ff::ff_t c[N];
   hashing::hash_to_point<N>(salt, sizeof(salt), msg, mlen, c);
@@ -76,7 +77,7 @@ sign(const fft::cmplx* const __restrict B,
 
   while (1) {
     // ffSampling i.e. compute z = (z0, z1), same as line 6 of algo 10
-    ffsampling::ff_sampling<N, 0, log2<N>()>(t0, t1, T, σ_min, z0, z1);
+    ffsampling::ff_sampling<N, 0, log2<N>()>(t0, t1, T, σ_min, z0, z1, rng);
 
     // compute tz = (tz0, tz1) = (t0 - z0, t1 - z1)
     polynomial::sub<log2<N>()>(t0, z0, tz0);

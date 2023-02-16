@@ -1,6 +1,7 @@
 #pragma once
 #include "ffsampling.hpp"
 #include "keygen.hpp"
+#include "prng.hpp"
 #include <cassert>
 
 // Test functional correctness of Falcon PQC suite implementation
@@ -47,13 +48,14 @@ test_ff_sampling(
   auto s1_ntt = static_cast<ff::ff_t*>(std::malloc(sizeof(ff::ff_t) * N));
   auto tmp0 = static_cast<fft::cmplx*>(std::malloc(sizeof(fft::cmplx) * N));
   auto tmp1 = static_cast<ff::ff_t*>(std::malloc(sizeof(ff::ff_t) * N));
+  prng::prng_t rng;
 
   // Falcon key generation, computes
   //
   // - Matrix B = [[g, -f], [G, -F]] ( FFT form )
   // - Falcon tree T ( FFT form )
   // - Falcon public key h ( Coeff Form )
-  keygen::keygen<N>(B, T, h, σ);
+  keygen::keygen<N>(B, T, h, σ, rng);
 
   // Emulate line 2 of algorithm 10 of Falcon specification
   for (size_t i = 0; i < N; i++) {
@@ -74,7 +76,7 @@ test_ff_sampling(
   }
 
   // ffSampling i.e. compute z = (z0, z1), same as line 6 of algo 10
-  ffsampling::ff_sampling<N, 0, log2<N>()>(t0, t1, T, σ_min, z0, z1);
+  ffsampling::ff_sampling<N, 0, log2<N>()>(t0, t1, T, σ_min, z0, z1, rng);
 
   // compute tz = (tz0, tz1) = (t0 - z0, t1 - z1)
   polynomial::sub<log2<N>()>(t0, z0, tz0);

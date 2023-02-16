@@ -1,5 +1,6 @@
 #pragma once
 #include "common.hpp"
+#include "prng.hpp"
 #include "u72.hpp"
 #include <algorithm>
 #include <array>
@@ -113,13 +114,27 @@ constexpr uint64_t C[]{ 0x00000004741183A3ul, 0x00000036548CFC06ul,
 // sampled using Uniform Integer Distribution, while seeding Mersenne Twister
 // Engine with system randomness. I strongly suggest you to look at
 // `random_fill` function, that's invoked below.
-template<const bool sample = true>
 static inline uint32_t
-base_sampler(std::array<uint8_t, 9> bytes = {})
+base_sampler(std::array<uint8_t, 9>&& bytes)
 {
-  if constexpr (sample) {
-    random_fill(bytes.data(), bytes.size());
+  const u72::u72_t u = u72::u72_t::from_le_bytes(std::move(bytes));
+
+  uint32_t z0 = 0u;
+  for (size_t i = 0; i < 18; i++) {
+    z0 = z0 + 1u * (u < RCDT[i]);
   }
+
+  return z0;
+}
+
+// BaseSampler routine as defined in algorithm 12 of Falcon specification
+// https://falcon-sign.info/falcon.pdf s.t. 72 uniform random bits are sampled
+// from SHAKE256 based PRNG ( which is a parameter of this function ).
+static inline uint32_t
+base_sampler(prng::prng_t& rng)
+{
+  std::array<uint8_t, 9> bytes;
+  rng.read(bytes.data(), bytes.size());
 
   const u72::u72_t u = u72::u72_t::from_le_bytes(std::move(bytes));
 
@@ -229,25 +244,24 @@ approx_exp(const double x, const double ccs)
 // Computes a single bit ( = 1 ) with probability ≈ ccs * e^−x | ccs, x >= 0
 //
 // This is an implementation of algorithm 14, described on page 43 of Falcon
-// specification https://falcon-sign.info/falcon.pdf
+// specification https://falcon-sign.info/falcon.pdf s.t. 8 uniform random bits
+// are sampled using SHAKE256 based PRNG.
 static inline uint8_t
-ber_exp(const double x, const double ccs)
+ber_exp(const double x, const double ccs, prng::prng_t& rng)
 {
   const double s = std::floor(x * INV_LN2);
   const double r = x - s * LN2;
   const uint64_t s_ = std::min<uint64_t>(static_cast<uint64_t>(s), 63ul);
   const uint64_t z = (2 * approx_exp(r, ccs) - 1) >> s_;
 
-  std::random_device rd;
-  std::mt19937_64 gen(rd());
-  std::uniform_int_distribution<uint8_t> dis{};
-
   int32_t w = 0;
   int64_t i = 64l;
   do {
     i = i - 8l;
 
-    const uint8_t t0 = dis(gen);
+    uint8_t t0;
+    rng.read(&t0, sizeof(t0));
+
     w = static_cast<int32_t>(t0) - static_cast<int32_t>((z >> i) & 0xfful);
   } while ((w == 0) && (i > 0l));
 
@@ -293,9 +307,13 @@ ber_exp(const double x,
 
 // Given floating point arguments μ, σ' | σ' ∈ [σ_min, σ_max], integer z ∈ Z,
 // sampled from a distribution very close to D_{Z, μ, σ′}, following algorithm
-// 15 of Falcon specification https://falcon-sign.info/falcon.pdf
+// 15 of Falcon specification https://falcon-sign.info/falcon.pdf s.t. all
+// random bits are sampled from a SHAKE256 based PRNG.
 static inline int32_t
-samplerz(const double μ, const double σ_prime, const double σ_min)
+samplerz(const double μ,
+         const double σ_prime,
+         const double σ_min,
+         prng::prng_t& rng)
 {
   const double r = μ - std::floor(μ);
   const double ccs = σ_min / σ_prime;
@@ -303,13 +321,13 @@ samplerz(const double μ, const double σ_prime, const double σ_min)
   const double t0 = 1. / (2. * σ_prime * σ_prime);
   constexpr double t1 = 1. / (2. * σ_max * σ_max);
 
-  std::random_device rd;
-  std::mt19937_64 gen(rd());
-  std::uniform_int_distribution<uint8_t> dis{};
-
   while (true) {
-    const auto z0 = static_cast<int32_t>(base_sampler());
-    const auto b = dis(gen) & 0b1;
+    const auto z0 = static_cast<int32_t>(base_sampler(rng));
+
+    uint8_t v;
+    rng.read(&v, sizeof(v));
+
+    const auto b = v & 0b1;
     const auto z = static_cast<double>(b + (2 * b - 1) * z0);
 
     const auto t2 = z - r;
@@ -320,7 +338,7 @@ samplerz(const double μ, const double σ_prime, const double σ_min)
     const auto t6 = t5 * t1;
 
     const auto x = t4 - t6;
-    const auto t7 = ber_exp(x, ccs);
+    const auto t7 = ber_exp(x, ccs, rng);
     if (t7 == 1) {
       return static_cast<int32_t>(z + std::floor(μ));
     }
@@ -362,7 +380,7 @@ samplerz(const double μ,
     std::reverse(tmp.begin(), tmp.end());
     ridx += 9;
 
-    const auto z0 = static_cast<int32_t>(base_sampler<false>(std::move(tmp)));
+    const auto z0 = static_cast<int32_t>(base_sampler(std::move(tmp)));
     const auto b = rbytes[ridx++] & 0b1;
     const auto z = static_cast<double>(b + (2 * b - 1) * z0);
 

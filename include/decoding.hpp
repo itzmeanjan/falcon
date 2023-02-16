@@ -170,6 +170,85 @@ decode_skey(const uint8_t* const __restrict skey,
   return true;
 }
 
+// Given a byte array, this routine extracts out 8 contiguous bits from given
+// bit index ( bitoff ).
+//
+// Imagine we've a byte array of length N (>=2) s.t. bits inside each byte are
+// enumerated as following
+//
+// b0,b1,b2,b3,b4,b5,b6,b7 | b0,b1,b2,b3,b4,b5,b6,b7 | ...
+// ---------------------- | ----------------------- | ...
+//      byte 0           |        byte 1           | ...
+//
+// b0 <- most significant bit
+// b7 <- least significant bit
+//
+// Now think we're asked to extract out 8 contiguous bits. starting from bit
+// index 5, then we'll figure
+//
+// - we're starting from byte index 0 ( = 5/ 8  )
+// - we should start accessing from bit index 5 ( = 5% 8 ) of byte index 0
+// - first we'll take 3 least significant bits of byte index 0
+// - finally we'll take 5 most significant bits of byte index 1
+// - that forms out uint8_t return value, holding 8 contiguous bits of interest
+//
+// If we're asked to extract 8 contigous bits, starting from bit index 11, then
+// we should figure
+//
+// - start from byte index 1 ( = 11/ 8 )
+// - start from bit index 3 ( = 11% 8 ) of byte index 1
+// - take 5 least significant bits of byte index 1
+// - and take 3 most significant bits of byte index 2
+//
+// Now notice, if we're working with a byte array of length 2 and we're asked to
+// extract 8 contiguous bits, starting from bit index 11, we will access memory
+// location which we're not supposed to be. So it's caller's responsibility to
+// ensure that atleast 2 consecutive memory locations ( i.e. bytes ) can be
+// accessed, starting from byte index (bitoff / 8).
+static inline constexpr uint8_t
+extract_8_contiguous_bits(const uint8_t* const __restrict bytes,
+                          const size_t bitoff)
+{
+  const size_t byte_at = bitoff >> 3;
+  const size_t bit_at = bitoff & 7ul;
+
+  const uint16_t word = (static_cast<uint16_t>(bytes[byte_at]) << 8) |
+                        static_cast<uint16_t>(bytes[byte_at + 1]);
+
+  return static_cast<uint8_t>(word >> (8 - bit_at));
+}
+
+// Given a byte array and starting bit index, this routine extracts out next n
+// contiguous bits s.t. n <= 8 and no bits from next byte is ever touched i.e.
+// only bits living at starting byte index are extracted out.
+//
+// Lets take an example, say we've a byte array which looks like following, when
+// bits are enumerated
+//
+// b0,b1,b2,b3,b4,b5,b6,b7 | b0,b1,b2,b3,b4,b5,b6,b7 / ...
+// ---------------------- | ----------------------- / ...
+//      byte 0           |        byte 1           / ...
+//
+// b0 <- most significant bit
+// b7 <- least significant bit
+//
+// Now I want to extract all remaining bits starting from bit index 12, so I
+// figure
+//
+// - starting byte index = 12/ 8 = 1
+// - starting bit index inside byte index 1 = 12% 8 = 4
+// - remaining bits in byte index 1 = 7 - 4 + 1 = 4
+// - extracts out <b4,b5,b6,b7> of byte index 1 as <b4,b5,b6,b7,0,0,0,0>
+static inline constexpr uint8_t
+extract_rem_contiguous_bits_in_byte(const uint8_t* const __restrict bytes,
+                                    const size_t bitoff)
+{
+  const size_t byte_at = bitoff >> 3;
+  const size_t bit_at = bitoff & 7ul;
+
+  return bytes[byte_at] << bit_at;
+}
+
 // Given compressed signature bytes, this routine attempts to decompress it back
 // to a degree N polynomial s.t. coefficients ∈ Z[x] and they are distributed
 // around 0, using algorithm 18 of Falcon specification
@@ -201,46 +280,42 @@ decompress_sig(const uint8_t* const __restrict sig,
     int32_t coeff = 0;
     uint8_t sign_bit = 0;
 
-    // extract sign bit
+    // extracts sign bit and low ( least significant ) 7 bits of coefficient
     {
-      const size_t byte_idx = bit_idx >> 3;
-      const size_t from_bit = bit_idx & 7ul;
+      const uint8_t res = extract_8_contiguous_bits(sig, bit_idx);
 
-      sign_bit = (sig[byte_idx] >> (7 - from_bit)) & 0b1;
-      bit_idx += 1;
-    }
-
-    // extract next 7 bits, which are low bits of coefficient
-    {
-      for (size_t i = bit_idx; i < bit_idx + 7; i++) {
-        const size_t byte_idx = i >> 3;
-        const size_t from_bit = i & 7ul;
-
-        const uint8_t bit = (sig[byte_idx] >> (7 - from_bit)) & 0b1;
-        coeff |= static_cast<int32_t>(bit << (6 - (i - bit_idx)));
-      }
-
-      bit_idx += 7;
+      sign_bit = res >> 7; // sign bit
+      coeff = res & 0x7f;  // low 7 bits of coefficient
+      bit_idx += 8;
     }
 
     // extract high bits of coefficient, which was encoded using unary code
     {
-      size_t k = 0;
+      size_t k = std::countl_zero(extract_8_contiguous_bits(sig, bit_idx));
+      if (k < 8) [[likely]] {
+        coeff += (1 << 7) * k;
+        bit_idx += k;
+      } else {
+        bit_idx += k;
+        for (; bit_idx < slen;) {
+          const auto ebits = std::min(8ul, slen - bit_idx);
 
-      for (size_t i = bit_idx; i < slen; i++) {
-        const size_t byte_idx = i >> 3;
-        const size_t from_bit = i & 7ul;
+          size_t v = 0;
+          if (ebits < 8) {
+            const auto t = extract_rem_contiguous_bits_in_byte(sig, bit_idx);
+            v = std::countl_zero(t);
+          } else {
+            const auto t = extract_8_contiguous_bits(sig, bit_idx);
+            v = std::countl_zero(t);
+          }
+          k += v;
+          bit_idx += ebits;
 
-        const uint8_t bit = (sig[byte_idx] >> (7 - from_bit)) & 0b1;
-        if (bit != 0) {
-          break;
+          if (v < ebits) {
+            break;
+          }
         }
-
-        k += 1;
       }
-
-      coeff += (1 << 7) * k;
-      bit_idx += k;
     }
 
     // recompute coefficient s_i
@@ -262,14 +337,20 @@ decompress_sig(const uint8_t* const __restrict sig,
   // enforce trailing bits are 0
   failed |= (bit_idx >= slen) | (coeff_idx < N);
   if (!failed) {
-    while (bit_idx < slen) {
-      const size_t byte_idx = bit_idx >> 3;
-      const size_t from_bit = bit_idx & 7ul;
+    for (; bit_idx < slen;) {
+      const size_t ebits = std::min(8ul, slen - bit_idx);
 
-      const uint8_t bit = (sig[byte_idx] >> (7 - from_bit)) & 0b1;
-      failed |= (bit != 0);
+      size_t v = 0;
+      if (ebits == 8) [[likely]] {
+        const auto t = extract_8_contiguous_bits(sig, bit_idx);
+        v = std::countl_zero(t);
+      } else {
+        const auto t = extract_rem_contiguous_bits_in_byte(sig, bit_idx);
+        v = std::countl_zero(t);
+      }
 
-      bit_idx += 1;
+      bit_idx += ebits;
+      failed |= (v < ebits);
     }
   }
 

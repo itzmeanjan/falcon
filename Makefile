@@ -14,6 +14,14 @@ test/a.out: test/main.cpp include/*.hpp include/test/*.hpp
 testing: test/a.out
 	./$<
 
+bench/a.out: bench/main.cpp include/*.hpp include/bench/*.hpp
+	# make sure you've google-benchmark globally installed;
+	# see https://github.com/google/benchmark/tree/84c71fa#installation
+	$(CXX) $(CXXFLAGS) $(OPTFLAGS) $(IFLAGS) $(DEP_IFLAGS) $< -o $@ $(LFLAGS) -lbenchmark
+
+benchmark: bench/a.out
+	./$< --benchmark_time_unit=us --benchmark_counters_tabular=true
+
 clean:
 	find . -name '*.out' -o -name '*.o' -o -name '*.so' -o -name '*.gch' | xargs rm -rf
 

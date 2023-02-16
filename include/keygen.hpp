@@ -102,8 +102,8 @@ static inline void
 keygen(fft::cmplx* const __restrict B, // FFT form of [[g, -f], [G, -F]]
        fft::cmplx* const __restrict T, // Falcon Tree
        ff::ff_t* const __restrict h,   // Falcon Public Key
-       const double σ // Standard deviation ( see table 3.3 of specification )
-       )
+       const double σ, // Standard deviation ( see table 3.3 of specification )
+       prng::prng_t& rng)
   requires((N == 512) || (N == 1024))
 {
   int32_t f[N];
@@ -111,7 +111,7 @@ keygen(fft::cmplx* const __restrict B, // FFT form of [[g, -f], [G, -F]]
   int32_t F[N];
   int32_t G[N];
 
-  ntru_gen::ntru_gen<N>(f, g, F, G);
+  ntru_gen::ntru_gen<N>(f, g, F, G, rng);
 
   for (size_t i = 0; i < N; i++) {
     B[i] = fft::cmplx{ static_cast<double>(g[i]) };

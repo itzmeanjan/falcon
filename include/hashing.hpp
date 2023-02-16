@@ -32,17 +32,19 @@ hash_to_point(const uint8_t* const __restrict salt,
   hasher.absorb(msg, mlen);
   hasher.finalize();
 
-  size_t i = 0;
-  uint8_t buf[2];
+  size_t coeff_idx = 0;
+  uint8_t buf[shake256::rate >> 3];
 
-  while (i < n) {
+  while (coeff_idx < n) {
     hasher.read(buf, sizeof(buf));
-    const uint16_t t = (static_cast<uint16_t>(buf[0]) << 8) |
-                       (static_cast<uint16_t>(buf[1]) << 0);
 
-    if (t < kq) {
-      poly[i] = ff::ff_t{ t };
-      i++;
+    for (size_t off = 0; (off < sizeof(buf)) && (coeff_idx < n); off += 2) {
+      const uint16_t t = (static_cast<uint16_t>(buf[off + 0]) << 8) |
+                         (static_cast<uint16_t>(buf[off + 1]) << 0);
+      if (t < kq) {
+        poly[coeff_idx] = ff::ff_t{ t };
+        coeff_idx++;
+      }
     }
   }
 }

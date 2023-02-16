@@ -72,8 +72,7 @@ struct u72_t
 
   // Given 9 bytes, this routine computes a 72 -bit unsigned integer s.t. these
   // bytes are interpreted in little-endian byte order.
-  static inline constexpr u72_t from_be_bytes(
-    const std::array<uint8_t, 9> bytes)
+  static inline constexpr u72_t from_be_bytes(std::array<uint8_t, 9>&& bytes)
   {
     const uint64_t hi = static_cast<uint64_t>(bytes[0]);
     uint64_t lo = 0ul;
@@ -102,8 +101,7 @@ struct u72_t
 
   // Given 9 bytes, this routine computes a 72 -bit unsigned integer s.t. these
   // bytes are interpreted in big-endian byte order.
-  static inline constexpr u72_t from_le_bytes(
-    const std::array<uint8_t, 9> bytes)
+  static inline constexpr u72_t from_le_bytes(std::array<uint8_t, 9>&& bytes)
   {
     const uint64_t hi = static_cast<uint64_t>(bytes[8]);
     uint64_t lo = 0ul;

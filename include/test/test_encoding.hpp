@@ -5,6 +5,7 @@
 #include "ffsampling.hpp"
 #include "hashing.hpp"
 #include "keygen.hpp"
+#include "prng.hpp"
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
@@ -60,8 +61,9 @@ test_encoding_skey()
   auto f_ = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
   auto g_ = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
   auto F_ = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
+  prng::prng_t rng;
 
-  ntru_gen::ntru_gen<N>(f, g, F, G);
+  ntru_gen::ntru_gen<N>(f, g, F, G, rng);
   encoding::encode_skey<N>(f, g, F, skey);
   const bool flg = decoding::decode_skey<N>(skey, f_, g_, F_);
 
@@ -128,10 +130,11 @@ test_sig_compression(
   auto dec_s2 = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
   auto sig = static_cast<uint8_t*>(std::malloc(siglen));
   auto tmp = static_cast<fft::cmplx*>(std::malloc(sizeof(fft::cmplx) * N));
+  prng::prng_t rng;
 
-  keygen::keygen<N>(B, T, h, σ);
-  random_fill(msg, mlen);
-  random_fill(salt, salt_len);
+  keygen::keygen<N>(B, T, h, σ, rng);
+  rng.read(msg, mlen);
+  rng.read(salt, salt_len);
   hashing::hash_to_point<N>(salt, salt_len, msg, mlen, c);
 
   for (size_t i = 0; i < N; i++) {
@@ -149,7 +152,7 @@ test_sig_compression(
 
   while (1) {
     // ffSampling i.e. compute z = (z0, z1), same as line 6 of algo 10
-    ffsampling::ff_sampling<N, 0, log2<N>()>(t0, t1, T, σ_min, z0, z1);
+    ffsampling::ff_sampling<N, 0, log2<N>()>(t0, t1, T, σ_min, z0, z1, rng);
 
     // compute tz = (tz0, tz1) = (t0 - z0, t1 - z1)
     polynomial::sub<log2<N>()>(t0, z0, tz0);
@@ -234,9 +237,10 @@ test_sig_decompression()
   auto sig0 = static_cast<uint8_t*>(std::malloc(siglen));
   auto sig1 = static_cast<uint8_t*>(std::malloc(siglen));
   auto s2 = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
+  prng::prng_t rng;
 
   // generate random signature bytes
-  random_fill(sig0, siglen);
+  rng.read(sig0, siglen);
 
   // attempt to decompress random signature
   const bool decompressed = decoding::decompress_sig<N, siglen>(sig0, s2);

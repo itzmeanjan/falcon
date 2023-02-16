@@ -1,6 +1,7 @@
 #pragma once
 #include "karatsuba.hpp"
 #include "polynomial.hpp"
+#include "prng.hpp"
 #include "samplerz.hpp"
 
 // Generate f, g, F, G ∈ Z[x]/(φ) | fG − gF = q mod φ ( i.e. NTRU equation )
@@ -16,7 +17,7 @@ constexpr double GS_NORM_THRESHOLD = 1.17 * 1.17 * static_cast<double>(ff::Q);
 // specification https://falcon-sign.info/falcon.pdf
 template<const size_t LOG2N>
 static inline void
-gen_poly(int32_t* const poly)
+gen_poly(int32_t* const poly, prng::prng_t& rng)
 {
   constexpr size_t N = 1ul << LOG2N;
   constexpr size_t k = 4096 / N;
@@ -30,7 +31,7 @@ gen_poly(int32_t* const poly)
 
     int32_t res = 0;
     for (size_t j = 0; j < k; j++) {
-      res += samplerz::samplerz(0., σ, σ_min);
+      res += samplerz::samplerz(0., σ, σ_min, rng);
     }
 
     poly[i] = res;
@@ -512,12 +513,13 @@ static inline void
 ntru_gen(int32_t* const __restrict f,
          int32_t* const __restrict g,
          int32_t* const __restrict F,
-         int32_t* const __restrict G)
+         int32_t* const __restrict G,
+         prng::prng_t& rng)
   requires((N == 512) || (N == 1024))
 {
   while (1) {
-    gen_poly<log2<N>()>(f);
-    gen_poly<log2<N>()>(g);
+    gen_poly<log2<N>()>(f, rng);
+    gen_poly<log2<N>()>(g, rng);
 
     if (!is_poly_invertible<log2<N>()>(f)) {
       continue;
