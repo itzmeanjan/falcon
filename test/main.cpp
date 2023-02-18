@@ -1,5 +1,4 @@
 #include "test/test_falcon.hpp"
-#include "test/test_signing.hpp"
 #include <iostream>
 
 int
