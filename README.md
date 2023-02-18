@@ -1,6 +1,30 @@
 # falcon
 Fast Fourier Lattice-based Compact Signatures over NTRU - NIST PQC Digital Signature Algorithm
 
+## Overview
+
+Falcon is one of those post-quantum digital signature algorithms ( DSA ), which are selected by NIST for standardization purpose. Falcon is a hash-and-sign lattice-based signature scheme, built on top of NTRU lattices. Falcon signature scheme can be described with following
+
+**FALCON = GPV Framework + NTRU Lattices + Fast Fourier Sampling**
+
+Falcon DSA offers following algorithms
+
+- Keypair generation
+- Signing of message
+- Verification of signature
+
+Algorithm | Input | Output | What does it do ?
+--- | --- | --- | --:
+`keygen` | | Public key and Private key | Generates a new keypair by solving NTRU equation.
+`sign` | Private key, M -bytes message | Compressed Signature | Given private key and a message, this routine signs message using Falcon Tree and ffSampling, while finally generating compressed signature bytes.
+`verify` | Public key, M -bytes message and compressed signature | Boolean flag denoting success ( true ) or failure ( false ) case of signature verification procedure | Given public key, a message ( which was signed ) and respective compressed signature, this routine verifies signature, returning truth value in case of successful signature verification.
+
+Here I'm maintaining a header-only C++ library implementing Falcon512 and Falcon1024 post-quantum digital signature algorithms, which is fairly easy to use, see [below](#usage).
+
+Falcon specification, which I thoroughly followed during this work, can be found @ https://falcon-sign.info/falcon.pdf. I suggest you go through that for having an in-depth understanding of Falcon DSA.
+
+> **Note** You may wish to follow progress of NIST PQC standardization effort @ https://csrc.nist.gov/projects/post-quantum-cryptography.
+
 ## Prerequisites
 
 - A C++ compiler with support for C++20 standard library
@@ -26,7 +50,7 @@ $ cmake --version
 cmake version 3.22.1
 ```
 
-- SHAKE256 XOF from `sha3` library is used for hashing message ( input to sign/ verify routine ) to a lattice point. `sha3` itself is a zero-dependency, header-only C++ library which is pinned to some specific commit using git submodule. For importing `sha3` issue following commands after cloning this repository,
+- SHAKE256 XOF from `sha3` library is used for hashing message ( input to sign/ verify routine ) to a lattice point. `sha3` itself is a zero-dependency, header-only C++ library which is pinned to some specific commit using git submodule. For importing `sha3`, issue following commands after cloning this repository.
 
 ```bash
 # Assuming repository is already cloned, if not try
@@ -45,13 +69,13 @@ sudo apt-get install -y libgmp-dev # On Ubuntu/ Debian
 brew install gmp                   # On MacOS
 ```
 
-- For benchmarking Falcon key generation/ signing/ verification routines, targeting CPU systems, you'll need `google-benchmark` header files and library (globally) installed. Follow https://github.com/google/benchmark/tree/b111d01c#installation if not available.
+- For benchmarking Falcon key generation/ signing/ verification routines, targeting CPU systems, you'll need `google-benchmark` header files and library (globally) installed. Follow https://github.com/google/benchmark/tree/b111d01c#installation for installation guideline.
 
 ## Testing
 
 For ensuring functional correctness of Falcon implementation ( along with its components such as `NTRUGen`, `NTRUSolve`, `samplerZ` or `ffSampling` etc. ) issue
 
-> **Warning** This implementation of Falcon is not yet tested to be **conformant** with NIST submission of Falcon --- because I've not yet tested it with **K**nown **A**nswer **T**ests which are present in Falcon submission package.
+> **Warning** This implementation of Falcon is not yet tested to be **conformant** with NIST submission of Falcon - that's because I've not yet tested it with **K**nown **A**nswer **T**ests which are present in Falcon submission package.
 
 ```bash
 make
@@ -221,7 +245,7 @@ I strongly advise you to go through following examples demonstrating usage of Fa
 Here's an example showing how to compile and run these examples.
 
 ```bash
-$ clang++ -std=c++20 -Wall  -O3 -march=native -mtune=native -I include/ -I sha3/include/ example/sign_one.cpp -lgmpxx -lgmp && ./a.out
+$ clang++ -std=c++20 -Wall -O3 -march=native -mtune=native -I include/ -I sha3/include/ example/sign_one.cpp -lgmpxx -lgmp && ./a.out
 
 Falcon512 (Sign Single Message)
 
