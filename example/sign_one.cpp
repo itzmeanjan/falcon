@@ -30,10 +30,10 @@ main()
   falcon::keygen<N>(pkey, skey);
   // sign message using FALCON512 private key
   const bool _signed = falcon::sign<N>(skey, msg, msglen, sig);
-  // verify message using FALCON512 public key
+  // verify message signature using FALCON512 public key
   const bool _verified = falcon::verify<N>(pkey, msg, msglen, sig);
 
-  std::cout << "Falcon" << N << "\n\n";
+  std::cout << "Falcon" << N << " (Sign Single Message)\n\n";
   std::cout << "Public Key : " << to_hex(pkey, pklen) << "\n";
   std::cout << "Secret Key : " << to_hex(skey, sklen) << "\n";
   std::cout << "Message    : " << to_hex(msg, msglen) << "\n";
