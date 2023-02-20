@@ -1,3 +1,5 @@
+> **Warning** **This implementation is not yet audited. If you consider using it in production, be careful !**
+
 # falcon
 Fast Fourier Lattice-based Compact Signatures over NTRU - NIST PQC Digital Signature Algorithm
 
