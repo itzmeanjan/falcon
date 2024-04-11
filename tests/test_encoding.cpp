@@ -1,22 +1,18 @@
-#pragma once
 #include "common.hpp"
 #include "decoding.hpp"
 #include "encoding.hpp"
 #include "ffsampling.hpp"
 #include "hashing.hpp"
 #include "keygen.hpp"
+#include "ntt.hpp"
 #include "prng.hpp"
-#include <cassert>
-#include <cstdlib>
 #include <cstring>
-
-// Test functional correctness of Falcon PQC suite implementation
-namespace test_falcon {
+#include <gtest/gtest.h>
 
 // Test whether random public key ( as polynomial over Fq | q = 12289 ), can be
 // correctly encoded/ decoded or not.
 template<const size_t N>
-void
+static void
 test_encoding_pkey()
 {
   constexpr size_t pklen = falcon_utils::compute_pkey_len<N>();
@@ -41,14 +37,20 @@ test_encoding_pkey()
   std::free(pkey);
   std::free(h_);
 
-  assert(flg);
-  assert(success);
+  EXPECT_TRUE(flg);
+  EXPECT_TRUE(success);
+}
+
+TEST(Falcon, EncodeDecodePublicKey)
+{
+  test_encoding_pkey<ntt::FALCON512_N>();
+  test_encoding_pkey<ntt::FALCON1024_N>();
 }
 
 // Test whether randomly generated ( using NTRUGen ) Falcon secret key can be
 // correctly encoded/ decoded or not.
 template<const size_t N>
-void
+static void
 test_encoding_skey()
 {
   constexpr size_t sklen = falcon_utils::compute_skey_len<N>();
@@ -61,9 +63,9 @@ test_encoding_skey()
   auto f_ = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
   auto g_ = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
   auto F_ = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
-  prng::prng_t rng;
+  prng::prng_t prng;
 
-  ntru_gen::ntru_gen<N>(f, g, F, G, rng);
+  ntru_gen::ntru_gen<N>(f, g, F, G, prng);
   encoding::encode_skey<N>(f, g, F, skey);
   const bool flg = decoding::decode_skey<N>(skey, f_, g_, F_);
 
@@ -83,8 +85,14 @@ test_encoding_skey()
   std::free(g_);
   std::free(F_);
 
-  assert(flg);
-  assert(success);
+  EXPECT_TRUE(flg);
+  EXPECT_TRUE(success);
+}
+
+TEST(Falcon, EncodeDecodeSecretKey)
+{
+  test_encoding_skey<ntt::FALCON512_N>();
+  test_encoding_skey<ntt::FALCON1024_N>();
 }
 
 // Generate Falcon{512, 1024} signature ( i.e. polynomial s2 ) to ensure that it
@@ -94,7 +102,7 @@ test_encoding_skey()
 // This test partially implements algorithm 10 of Falcon specification, to
 // ensure correctness of signature compression/ decompression routines.
 template<const size_t N>
-void
+static void
 test_sig_compression(
   const double σ,     // Standard deviation ( see table 3.3 of specification )
   const double σ_min, // See table 3.3 of specification
@@ -130,11 +138,11 @@ test_sig_compression(
   auto dec_s2 = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
   auto sig = static_cast<uint8_t*>(std::malloc(siglen));
   auto tmp = static_cast<fft::cmplx*>(std::malloc(sizeof(fft::cmplx) * N));
-  prng::prng_t rng;
+  prng::prng_t prng;
 
-  keygen::keygen<N>(B, T, h, σ, rng);
-  rng.read(msg, mlen);
-  rng.read(salt, salt_len);
+  keygen::keygen<N>(B, T, h, σ, prng);
+  prng.read(msg, mlen);
+  prng.read(salt, salt_len);
   hashing::hash_to_point<N>(salt, salt_len, msg, mlen, c);
 
   for (size_t i = 0; i < N; i++) {
@@ -152,7 +160,7 @@ test_sig_compression(
 
   while (1) {
     // ffSampling i.e. compute z = (z0, z1), same as line 6 of algo 10
-    ffsampling::ff_sampling<N, 0, log2<N>()>(t0, t1, T, σ_min, z0, z1, rng);
+    ffsampling::ff_sampling<N, 0, log2<N>()>(t0, t1, T, σ_min, z0, z1, prng);
 
     // compute tz = (tz0, tz1) = (t0 - z0, t1 - z1)
     polynomial::sub<log2<N>()>(t0, z0, tz0);
@@ -218,8 +226,14 @@ test_sig_compression(
   std::free(sig);
   std::free(tmp);
 
-  assert(decompressed);
-  assert(matches);
+  EXPECT_TRUE(decompressed);
+  EXPECT_TRUE(matches);
+}
+
+TEST(Falcon, SignatureCompression)
+{
+  test_sig_compression<ntt::FALCON512_N>(165.736617183, 1.277833697, 34034726);
+  test_sig_compression<ntt::FALCON1024_N>(168.388571447, 1.298280334, 70265242);
 }
 
 // Generate random signature bytes and attempt to decompress it, see how
@@ -227,7 +241,7 @@ test_sig_compression(
 // to decompress and if it succeeds, it should also be able to compress it
 // properly - check that situation too.
 template<const size_t N>
-void
+static void
 test_sig_decompression()
 {
   // See table 3.3 of the specification
@@ -237,10 +251,10 @@ test_sig_decompression()
   auto sig0 = static_cast<uint8_t*>(std::malloc(siglen));
   auto sig1 = static_cast<uint8_t*>(std::malloc(siglen));
   auto s2 = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
-  prng::prng_t rng;
+  prng::prng_t prng;
 
   // generate random signature bytes
-  rng.read(sig0, siglen);
+  prng.read(sig0, siglen);
 
   // attempt to decompress random signature
   const bool decompressed = decoding::decompress_sig<N, siglen>(sig0, s2);
@@ -248,7 +262,7 @@ test_sig_decompression()
   if (decompressed) {
     // if anyhow decompressed, we should be able to compress it too
     const bool compressed = encoding::compress_sig<N, siglen>(s2, sig1);
-    assert(compressed);
+    EXPECT_TRUE(compressed);
 
     // if compressed, both should produce same signature
     //
@@ -259,7 +273,7 @@ test_sig_decompression()
       matches &= sig0[i] == sig1[i];
     }
 
-    assert(matches);
+    EXPECT_TRUE(matches);
   }
 
   std::free(sig0);
@@ -267,4 +281,8 @@ test_sig_decompression()
   std::free(s2);
 }
 
+TEST(Falcon, SignatureDecompression)
+{
+  test_sig_decompression<ntt::FALCON512_N>();
+  test_sig_decompression<ntt::FALCON1024_N>();
 }

@@ -1,11 +1,8 @@
-#pragma once
 #include "ffsampling.hpp"
 #include "keygen.hpp"
+#include "ntt.hpp"
 #include "prng.hpp"
-#include <cassert>
-
-// Test functional correctness of Falcon PQC suite implementation
-namespace test_falcon {
+#include <gtest/gtest.h>
 
 // Check whether we can successfully generate two polynomials (s1, s2) each of
 // degree-N s.t. they satisfy the equation s1 + s2 * h = c ( mod q ), given
@@ -18,7 +15,7 @@ namespace test_falcon {
 // correct and it works as expected by attempting to **partially** implement
 // Falcon signing algorithm ( algo 10 in specification ).
 template<const size_t N>
-void
+static void
 test_ff_sampling(
   const double σ,    // Standard deviation ( see table 3.3 of specification )
   const double σ_min // See table 3.3 of specification
@@ -136,7 +133,11 @@ test_ff_sampling(
   std::free(tmp0);
   std::free(tmp1);
 
-  assert(match);
+  EXPECT_TRUE(match);
 }
 
+TEST(Falcon, FastFourierSampling)
+{
+  test_ff_sampling<ntt::FALCON512_N>(165.736617183, 1.277833697);
+  test_ff_sampling<ntt::FALCON1024_N>(168.388571447, 1.298280334);
 }

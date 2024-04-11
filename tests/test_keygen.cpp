@@ -1,15 +1,11 @@
-#pragma once
+#include "check_ntru_eq.hpp"
 #include "decoding.hpp"
 #include "encoding.hpp"
 #include "falcon.hpp"
 #include "ntru_gen.hpp"
+#include "ntt.hpp"
 #include "prng.hpp"
-#include "test_ntru_gen.hpp"
-#include <cassert>
-#include <cstdlib>
-
-// Test functional correctness of Falcon PQC suite implementation
-namespace test_falcon {
+#include <gtest/gtest.h>
 
 // Test if Falcon Key Generation Algorithm works as expected by doing following
 //
@@ -20,7 +16,7 @@ namespace test_falcon {
 // - Check if NTRU equation still satisfies or not
 // - Also ensure that actual G and recomputed G' matches
 template<const size_t N>
-void
+static void
 test_keygen()
 {
   constexpr size_t sklen = falcon_utils::compute_skey_len<N>();
@@ -45,7 +41,7 @@ test_keygen()
   // Recompute G using NTRU equation
   falcon::recompute_G<N>(f_, g_, F_, G_);
   // See if NTRU equation can be solved
-  const bool flg = check_ntru_eq<N>(f_, g_, F_, G_);
+  const bool flg = test_falcon::check_ntru_eq<N>(f_, g_, F_, G_);
 
   // Ensure that each coefficient of original G and recomputed G' matches
   bool match = true;
@@ -63,8 +59,12 @@ test_keygen()
   std::free(G_);
   std::free(skey);
 
-  assert(flg);
-  assert(match);
+  EXPECT_TRUE(flg);
+  EXPECT_TRUE(match);
 }
 
+TEST(Falcon, KeyGeneration)
+{
+  test_keygen<ntt::FALCON512_N>();
+  test_keygen<ntt::FALCON1024_N>();
 }
