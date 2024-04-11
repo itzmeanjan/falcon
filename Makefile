@@ -35,10 +35,10 @@ $(BUILD_DIR):
 	mkdir -p $@
 
 $(SHA3_INC_DIR):
-	git submodule update --init
+	git submodule update --init sha3
 
 $(GTEST_PARALLEL): $(SHA3_INC_DIR)
-	git submodule update --init
+	git submodule update --init gtest-parallel
 
 $(BUILD_DIR)/%.o: $(TEST_DIR)/%.cpp $(BUILD_DIR) $(SHA3_INC_DIR)
 	$(CXX) $(CXX_FLAGS) $(WARN_FLAGS) $(OPT_FLAGS) $(I_FLAGS) $(DEP_IFLAGS) -c $< -o $@
