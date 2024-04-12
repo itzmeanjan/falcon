@@ -1,4 +1,4 @@
-name: Test Falcon using CI
+name: Test Falcon Post-Quantum Digital Signature Algorithm
 
 on:
   push:
@@ -8,19 +8,31 @@ on:
 
 jobs:
   build:
-
-    runs-on: ubuntu-20.04
+    runs-on: ${{matrix.os}}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Get Dependency
-      run: git submodule update --init
-    - name: Setup Compiler
+    - uses: actions/checkout@v4
+    - name: Setup Google-Test
       run: |
-        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
-        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-9 9
-        sudo apt-get install -y libgmp-dev
-    - name: Execute Tests
-      run: make
-    - name: Cleanup
-      run: make clean
+        pushd ~
+        git clone https://github.com/google/googletest.git -b v1.14.0
+        pushd googletest
+        mkdir build
+        pushd build
+        cmake .. -DBUILD_GMOCK=OFF
+        make
+        sudo make install
+        popd
+        popd
+        popd
+    - name: Install libGMP
+      run: sudo apt-get install -y libgmp-dev
+      if: matrix.os == 'ubuntu-latest'
+    - name: Install libGMP
+      run: brew install gmp
+      if: matrix.os == 'macos-latest'
+    - name: Execute Tests on ${{matrix.os}}
+      run: make -j

@@ -1,7 +1,9 @@
 #pragma once
 #include "common.hpp"
 #include "utils.hpp"
+#include <algorithm>
 #include <cstring>
+#include <iterator>
 
 // Falcon KeyPair and Signature Decoding Routines
 namespace decoding {
@@ -25,7 +27,7 @@ decode_pkey(const uint8_t* const __restrict pkey, ff::ff_t* const __restrict h)
   constexpr uint8_t mask2 = 0x03;
 
   if (pkey[0] != header) [[unlikely]] {
-    std::memset(h, 0, sizeof(ff::ff_t) * N);
+    std::fill_n(h, N, 0);
     return false;
   }
 
@@ -63,9 +65,9 @@ decode_skey(const uint8_t* const __restrict skey,
   constexpr uint8_t header = 0x50 | static_cast<uint8_t>(log2<N>());
 
   if (skey[0] != header) [[unlikely]] {
-    std::memset(f, 0, sizeof(int32_t) * N);
-    std::memset(g, 0, sizeof(int32_t) * N);
-    std::memset(F, 0, sizeof(int32_t) * N);
+    std::fill_n(f, N, 0);
+    std::fill_n(g, N, 0);
+    std::fill_n(F, N, 0);
 
     return false;
   }

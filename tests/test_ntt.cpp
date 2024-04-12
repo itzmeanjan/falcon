@@ -1,10 +1,6 @@
-#pragma once
 #include "polynomial.hpp"
-#include <cassert>
 #include <cstring>
-
-// Test functional correctness of Falcon PQC suite implementation
-namespace test_falcon {
+#include <gtest/gtest.h>
 
 // Ensure functional correctness of (i)NTT implementation, using polynomial
 // multiplication and division over Z_q
@@ -12,7 +8,7 @@ namespace test_falcon {
 // Test is adapted from
 // https://github.com/tprest/falcon.py/blob/88d01ed/test.py#L62-L77
 template<const size_t lgn>
-void
+static void
 test_ntt()
 {
   const size_t n = 1ul << lgn;
@@ -71,7 +67,11 @@ test_ntt()
   std::free(ntt_c);
   std::free(ntt_d);
 
-  assert(!flg);
+  EXPECT_FALSE(flg);
 }
 
+TEST(Falcon, NumberTheoreticTransform)
+{
+  test_ntt<ntt::FALCON512_LOG2N>();
+  test_ntt<ntt::FALCON1024_LOG2N>();
 }

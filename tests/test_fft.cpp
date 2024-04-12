@@ -1,51 +1,7 @@
-#pragma once
 #include "fft.hpp"
 #include "polynomial.hpp"
-#include <cassert>
 #include <cstring>
-
-// Test functional correctness of Falcon PQC suite implementation
-namespace test_falcon {
-
-// Splits a polynomial f into two polynomials f0, f1 s.t. all these polynomials
-// are in their coefficient representation.
-//
-// This routine is an implementation of equation 3.20, described in section 3.6,
-// on page 28 of the Falcon specification https://falcon-sign.info/falcon.pdf
-template<const size_t lgn>
-inline void
-split(const fft::cmplx* const __restrict f,
-      fft::cmplx* const __restrict f0,
-      fft::cmplx* const __restrict f1)
-{
-  constexpr size_t n = 1ul << lgn;
-  constexpr size_t hn = n >> 1;
-
-  for (size_t i = 0; i < hn; i++) {
-    f0[i] = f[2 * i];
-    f1[i] = f[2 * i + 1];
-  }
-}
-
-// Merges two polynomials f0, f1 into a single one f s.t. all these polynomials
-// are in their coefficient representation.
-//
-// This routine is an implementation of equation 3.22, described in section 3.6,
-// on page 28 of the Falcon specification https://falcon-sign.info/falcon.pdf
-template<const size_t lgn>
-inline void
-merge(const fft::cmplx* const __restrict f0,
-      const fft::cmplx* const __restrict f1,
-      fft::cmplx* const __restrict f)
-{
-  constexpr size_t n = 1ul << lgn;
-  constexpr size_t hn = n >> 1;
-
-  for (size_t i = 0; i < hn; i++) {
-    f[2 * i + 0] = f0[i];
-    f[2 * i + 1] = f1[i];
-  }
-}
+#include <gtest/gtest.h>
 
 // Ensure functional correctness of (i)FFT implementation, using polynomial
 // multiplication and division in FFT form, over C
@@ -53,7 +9,7 @@ merge(const fft::cmplx* const __restrict f0,
 // Test is adapted from
 // https://github.com/tprest/falcon.py/blob/88d01ed/test.py#L46-L59
 template<const size_t lgn>
-void
+static void
 test_fft()
 {
   constexpr size_t n = 1ul << lgn;
@@ -105,7 +61,53 @@ test_fft()
   std::free(fft_c);
   std::free(fft_d);
 
-  assert(!flg);
+  EXPECT_FALSE(flg);
+}
+
+TEST(Falcon, PolynomialArithmeticInFFTDomain)
+{
+  test_fft<ntt::FALCON512_LOG2N>();
+  test_fft<ntt::FALCON1024_LOG2N>();
+}
+
+// Splits a polynomial f into two polynomials f0, f1 s.t. all these polynomials
+// are in their coefficient representation.
+//
+// This routine is an implementation of equation 3.20, described in section 3.6,
+// on page 28 of the Falcon specification https://falcon-sign.info/falcon.pdf
+template<const size_t lgn>
+static inline void
+split(const fft::cmplx* const __restrict f,
+      fft::cmplx* const __restrict f0,
+      fft::cmplx* const __restrict f1)
+{
+  constexpr size_t n = 1ul << lgn;
+  constexpr size_t hn = n >> 1;
+
+  for (size_t i = 0; i < hn; i++) {
+    f0[i] = f[2 * i];
+    f1[i] = f[2 * i + 1];
+  }
+}
+
+// Merges two polynomials f0, f1 into a single one f s.t. all these polynomials
+// are in their coefficient representation.
+//
+// This routine is an implementation of equation 3.22, described in section 3.6,
+// on page 28 of the Falcon specification https://falcon-sign.info/falcon.pdf
+template<const size_t lgn>
+static inline void
+merge(const fft::cmplx* const __restrict f0,
+      const fft::cmplx* const __restrict f1,
+      fft::cmplx* const __restrict f)
+{
+  constexpr size_t n = 1ul << lgn;
+  constexpr size_t hn = n >> 1;
+
+  for (size_t i = 0; i < hn; i++) {
+    f[2 * i + 0] = f0[i];
+    f[2 * i + 1] = f1[i];
+  }
 }
 
 // Ensure that splitting and merging of polynomials in their FFT representation
@@ -113,7 +115,7 @@ test_fft()
 // between split, merge, split_fft, merge_fft, FFT and iFFT routines, on page 30
 // of the Falcon specification https://falcon-sign.info/falcon.pdf
 template<const size_t lgn>
-void
+static void
 test_fft_split_merge()
 {
   constexpr bool flg = lgn >= 2 && lgn <= 10;
@@ -192,9 +194,20 @@ test_fft_split_merge()
   std::free(ifft_f0);
   std::free(ifft_f1);
 
-  assert(!flg0);
-  assert(!flg1);
-  assert(!flg2);
+  EXPECT_FALSE(flg0);
+  EXPECT_FALSE(flg1);
+  EXPECT_FALSE(flg2);
 }
 
+TEST(Falcon, PolynomialSplitAndMergeInFFTDomain)
+{
+  test_fft_split_merge<2>();
+  test_fft_split_merge<3>();
+  test_fft_split_merge<4>();
+  test_fft_split_merge<5>();
+  test_fft_split_merge<6>();
+  test_fft_split_merge<7>();
+  test_fft_split_merge<8>();
+  test_fft_split_merge<9>();
+  test_fft_split_merge<10>();
 }

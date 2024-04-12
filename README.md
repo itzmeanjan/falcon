@@ -25,43 +25,29 @@ Here I'm maintaining a header-only C++ library implementing Falcon512 and Falcon
 
 Falcon specification, which I thoroughly followed during this work, can be found @ https://falcon-sign.info/falcon.pdf. I suggest you go through that for having an in-depth understanding of Falcon DSA.
 
-> **Note** You may wish to follow progress of NIST PQC standardization effort @ https://csrc.nist.gov/projects/post-quantum-cryptography.
-
 ## Prerequisites
 
-- A C++ compiler with support for C++20 standard library
+- A C++ compiler with support for C++20 standard library.
 
 ```bash
-$ clang++ --version
-Apple clang version 14.0.0 (clang-1400.0.29.202)
-Target: x86_64-apple-darwin22.2.0
+$ clang++ -v
+Ubuntu clang version 17.0.2 (1~exp1ubuntu2.1)
+Target: x86_64-pc-linux-gnu
 Thread model: posix
-InstalledDir: /Library/Developer/CommandLineTools/usr/bin
+InstalledDir: /usr/bin
 
-$ g++ --version
-g++ (Ubuntu 11.2.0-19ubuntu1) 11.2.0
+$ g++ -v
+gcc version 13.2.0 (Ubuntu 13.2.0-4ubuntu3) 
 ```
 
-- System development utilities such as `make` and `cmake`
+- System development utilities such as `make`, `cmake`
 
 ```bash
 $ make --version
 GNU Make 4.3
 
 $ cmake --version
-cmake version 3.22.1
-```
-
-- SHAKE256 XOF from `sha3` library is used for hashing message ( input to sign/ verify routine ) to a lattice point. `sha3` itself is a zero-dependency, header-only C++ library which is pinned to some specific commit using git submodule. For importing `sha3`, issue following commands after cloning this repository.
-
-```bash
-# Assuming repository is already cloned, if not try
-#
-# git clone https://github.com/itzmeanjan/falcon.git
-
-pushd falcon
-git submodule update --init
-popd
+cmake version 3.27.4
 ```
 
 - Falcon key generation algorithm requires us to solve NTRU equation ( see equation 3.15 of Falcon specification ) which needs arbitrary precision integer ( i.e. big integer ) arithmetic support. For that purpose I use GNU MP library's C++ interface. Find more @ https://gmplib.org/manual. Install GMP header files and library using following commands.
@@ -71,64 +57,132 @@ sudo apt-get install -y libgmp-dev # On Ubuntu/ Debian
 brew install gmp                   # On MacOS
 ```
 
-- For benchmarking Falcon key generation/ signing/ verification routines, targeting CPU systems, you'll need `google-benchmark` header files and library (globally) installed. Follow https://github.com/google/benchmark/tree/b111d01c#installation for installation guideline.
+- For testing correctness and compatibility of this Falcon DSA implementation, you need to (globally) install `google-test` library and headers. Follow guide @ https://github.com/google/googletest/tree/main/googletest#standalone-cmake-project, if you don't have it installed.
+vvccccvufjefnghncirgbu
+- For benchmarking Falcon key generation, signing and verification routines, targeting CPU systems, you'll need `google-benchmark` header files and library (globally) installed. Follow https://github.com/google/benchmark#installation for installation guideline.
+
+> [!NOTE]
+> If you are on a machine running GNU/Linux kernel and you want to obtain CPU cycle count for DSA routines, you should consider building `google-benchmark` library with `libPFM` support, following https://gist.github.com/itzmeanjan/05dc3e946f635d00c5e0b21aae6203a7, a step-by-step guide. Find more about libPFM @ https://perfmon2.sourceforge.net.
+
+> [!TIP]
+> Git submodule based dependencies will generally be imported automatically, but in case that doesn't work, you can manually initialize and update them all by issuing `$ git submodule update --init` from inside the root of this repository.
 
 ## Testing
 
 For ensuring functional correctness of Falcon implementation ( along with its components such as `NTRUGen`, `NTRUSolve`, `samplerZ` or `ffSampling` etc. ) issue
 
-> **Warning** This implementation of Falcon is not yet tested to be **conformant** with NIST submission of Falcon - that's because I've not yet tested it with **K**nown **A**nswer **T**ests which are present in Falcon submission package.
+> [!CAUTION]
+> This implementation of Falcon DSA is not yet tested to be **conformant** with NIST submission of Falcon - that's because I've not yet tested it with **K**nown **A**nswer **T**ests which are present in Falcon submission package.
 
 ```bash
-make
+make -j
+```
 
-[test] Falcon prime field arithmetic
-[test] (inverse) Number Theoretic Transform over Z_q
-[test] (inverse) Fast Fourier Transform over Q
-[test] Splitting and merging of polynomials in FFT form
-[test] Sampler over the Integers, using KATs
-[test] NTRUGen
-[test] Encode/ Decode Public Key
-[test] Encode/ Decode Secret Key
-[test] Falcon KeyGen
-[test] Fast Fourier Sampling
-[test] Signature Compression/ Decompression
-[test] Keygen -> Sign -> Verify
+```bash
+[14/14] Falcon.KeygenSignVerify (4572 ms)
+PASSED TESTS (14/14):
+       4 ms: build/test.out Falcon.PolynomialSplitAndMergeInFFTDomain
+       4 ms: build/test.out Falcon.SignatureDecompression
+       4 ms: build/test.out Falcon.PolynomialArithmeticInFFTDomain
+       5 ms: build/test.out Falcon.Falcon512SamplerZKnownAnswerTests
+       5 ms: build/test.out Falcon.Falcon1024SamplerZKnownAnswerTests
+      10 ms: build/test.out Falcon.EncodeDecodePublicKey
+      13 ms: build/test.out Falcon.NumberTheoreticTransform
+    3077 ms: build/test.out Falcon.SignatureCompression
+    3227 ms: build/test.out Falcon.KeyGeneration
+    3249 ms: build/test.out Falcon.NTRUGen
+    3718 ms: build/test.out Falcon.ArithmeticOverZq
+    4258 ms: build/test.out Falcon.FastFourierSampling
+    4272 ms: build/test.out Falcon.EncodeDecodeSecretKey
+    4572 ms: build/test.out Falcon.KeygenSignVerif
 ```
 
 ## Benchmarking
 
-For benchmarking Falcon{512, 1024} key generation, signing and verification for fixed length message of 32B, issue
+For benchmarking Falcon{512, 1024} key generation, signing and verification algorithms, given fixed length message of 32B, issue
 
 ```bash
-make benchmark
+make benchmark -j  # If you haven't built google-benchmark library with libPFM support.
+make perf -j       # If you have built google-benchmark library with libPFM support.
 ```
 
-> **Warning** You must disable CPU frequency scaling during benchmarking; see [this](https://github.com/google/benchmark/blob/b111d01c1b4cc86da08672a68cddcbcc1cedd742/docs/user_guide.md#disabling-cpu-frequency-scaling) guide.
+> [!CAUTION]
+> You must disable CPU frequency scaling during benchmarking; see [this](https://github.com/google/benchmark/blob/b111d01c1b4cc86da08672a68cddcbcc1cedd742/docs/user_guide.md#disabling-cpu-frequency-scaling) guide on how to do that.
 
-### On Intel(R) Core(TM) i5-8279U CPU @ 2.40GHz [ Compiled with Clang ]
+> [!NOTE]
+> `make perf -j` - was issued when collecting following benchmarks. Notice, **cycles** column, denoting cost of executing Falcon signature scheme routines in terms of elapsed CPU cycles. Follow [this](https://github.com/google/benchmark/blob/main/docs/perf_counters.md) for more details.
+
+
+### On 12th Gen Intel(R) Core(TM) i7-1260P
+
+Compiled with **gcc version 13.2.0 (Ubuntu 13.2.0-4ubuntu3)**.
 
 ```bash
-2023-02-18T12:07:57+04:00
-Running ./bench/a.out
-Run on (8 X 2400 MHz CPU s)
+$ uname -srm
+Linux 6.5.0-14-generic x86_64
+```
+
+```bash
+2024-04-12T12:46:46+04:00
+Running ./build/perf.out
+Run on (16 X 4670.99 MHz CPU s)
 CPU Caches:
-  L1 Data 32 KiB
-  L1 Instruction 32 KiB
-  L2 Unified 256 KiB (x4)
-  L3 Unified 6144 KiB
-Load Average: 2.26, 2.26, 1.98
-----------------------------------------------------------------------------------------------
-Benchmark                                   Time             CPU   Iterations items_per_second
-----------------------------------------------------------------------------------------------
-bench_falcon::keygen<512>              953701 us       952681 us            1        1.04967/s
-bench_falcon::sign_single<512>/32         546 us          546 us         1304       1.83235k/s
-bench_falcon::sign_many<512>/32           342 us          342 us         2082       2.92446k/s
-bench_falcon::verify<512>/32             27.5 us         27.5 us        26034       36.4035k/s
-bench_falcon::keygen<1024>            5385395 us      5381617 us            1       0.185818/s
-bench_falcon::sign_single<1024>/32       1139 us         1136 us          632        880.013/s
-bench_falcon::sign_many<1024>/32          690 us          689 us         1001       1.45054k/s
-bench_falcon::verify<1024>/32            55.1 us         55.0 us        12780       18.1959k/s
+  L1 Data 48 KiB (x8)
+  L1 Instruction 32 KiB (x8)
+  L2 Unified 1280 KiB (x8)
+  L3 Unified 18432 KiB (x1)
+Load Average: 1.38, 1.19, 0.94
+---------------------------------------------------------------------------------------------------------
+Benchmark                                   Time             CPU   Iterations     CYCLES items_per_second
+---------------------------------------------------------------------------------------------------------
+falcon_sign_single<512>/32_mean           320 us          320 us           16   1.46016M       3.12457k/s
+falcon_sign_single<512>/32_median         319 us          319 us           16   1.46034M       3.13373k/s
+falcon_sign_single<512>/32_stddev        5.89 us         5.81 us           16   1.77985k        53.8792/s
+falcon_sign_single<512>/32_cv            1.84 %          1.81 %            16      0.12%            1.72%
+falcon_sign_single<512>/32_min            313 us          313 us           16   1.45564M       2.93297k/s
+falcon_sign_single<512>/32_max            341 us          341 us           16   1.46261M       3.19922k/s
+falcon_sign_single<1024>/32_mean          650 us          650 us           16   2.97417M       1.53905k/s
+falcon_sign_single<1024>/32_median        650 us          650 us           16   2.97525M       1.53914k/s
+falcon_sign_single<1024>/32_stddev       3.76 us         3.73 us           16   10.1068k        8.93083/s
+falcon_sign_single<1024>/32_cv           0.58 %          0.57 %            16      0.34%            0.58%
+falcon_sign_single<1024>/32_min           638 us          638 us           16    2.9391M       1.52263k/s
+falcon_sign_single<1024>/32_max           657 us          657 us           16    2.9869M       1.56801k/s
+falcon_verify<512>/32_mean               20.3 us         20.3 us           16   93.7515k       49.4226k/s
+falcon_verify<512>/32_median             19.8 us         19.8 us           16   92.2862k       50.4788k/s
+falcon_verify<512>/32_stddev             1.13 us         1.13 us           16   4.42223k       2.59822k/s
+falcon_verify<512>/32_cv                 5.58 %          5.58 %            16      4.72%            5.26%
+falcon_verify<512>/32_min                19.3 us         19.3 us           16   90.3351k       43.9262k/s
+falcon_verify<512>/32_max                22.8 us         22.8 us           16   105.756k       51.8446k/s
+falcon_keygen<1024>_mean              2081521 us      2081348 us           16   9.42315G       0.494535/s
+falcon_keygen<1024>_median            2123409 us      2123208 us           16   9.49366G       0.470987/s
+falcon_keygen<1024>_stddev             285936 us       285905 us           16   1.28563G        0.11184/s
+falcon_keygen<1024>_cv                  13.74 %         13.74 %            16     13.64%           22.62%
+falcon_keygen<1024>_min               1106142 us      1106067 us           16   5.13248G       0.398895/s
+falcon_keygen<1024>_max               2507137 us      2506923 us           16    11.619G       0.904104/s
+falcon_verify<1024>/32_mean              44.4 us         44.4 us           16   207.814k       22.6869k/s
+falcon_verify<1024>/32_median            43.4 us         43.4 us           16   203.196k       23.0538k/s
+falcon_verify<1024>/32_stddev            3.99 us         4.00 us           16   18.6401k       1.85145k/s
+falcon_verify<1024>/32_cv                9.00 %          9.01 %            16      8.97%            8.16%
+falcon_verify<1024>/32_min               39.6 us         39.6 us           16   185.304k       18.2602k/s
+falcon_verify<1024>/32_max               54.8 us         54.8 us           16    256.56k       25.2763k/s
+falcon_sign_many<512>/32_mean             240 us          240 us           16   1.12495M       4.16211k/s
+falcon_sign_many<512>/32_median           240 us          240 us           16   1.12495M        4.1627k/s
+falcon_sign_many<512>/32_stddev         0.294 us        0.293 us           16   1.31681k        5.07456/s
+falcon_sign_many<512>/32_cv              0.12 %          0.12 %            16      0.12%            0.12%
+falcon_sign_many<512>/32_min              240 us          240 us           16     1.123M       4.15473k/s
+falcon_sign_many<512>/32_max              241 us          241 us           16   1.12706M       4.16936k/s
+falcon_keygen<512>_mean                347534 us       347505 us           16   1.60853G        2.93599/s
+falcon_keygen<512>_median              354691 us       354665 us           16   1.62563G         2.8202/s
+falcon_keygen<512>_stddev               40624 us        40623 us           16   184.086M        0.53753/s
+falcon_keygen<512>_cv                   11.69 %         11.69 %            16     11.44%           18.31%
+falcon_keygen<512>_min                 203496 us       203479 us           16   952.046M        2.60755/s
+falcon_keygen<512>_max                 383506 us       383502 us           16   1.75497G        4.91452/s
+falcon_sign_many<1024>/32_mean            484 us          484 us           16   2.24619M       2.06551k/s
+falcon_sign_many<1024>/32_median          484 us          484 us           16   2.24591M       2.06678k/s
+falcon_sign_many<1024>/32_stddev         1.26 us         1.26 us           16   4.07933k        5.36503/s
+falcon_sign_many<1024>/32_cv             0.26 %          0.26 %            16      0.18%            0.26%
+falcon_sign_many<1024>/32_min             482 us          482 us           16   2.24036M       2.05496k/s
+falcon_sign_many<1024>/32_max             487 us          487 us           16   2.25521M        2.0733k/s
 ```
 
 ## Usage
@@ -241,13 +295,13 @@ assert(_verified);
 
 I strongly advise you to go through following examples demonstrating usage of Falcon key generation/ signing/ verification API.
 
-- [Sign a single message](./example/sign_one.cpp)
-- [Sign many messages](./example/sign_many.cpp)
+- [Sign a single message](./examples/sign_one.cpp)
+- [Sign many messages](./examples/sign_many.cpp)
 
 Here's an example showing how to compile and run these examples.
 
 ```bash
-$ clang++ -std=c++20 -Wall -O3 -march=native -mtune=native -I include/ -I sha3/include/ example/sign_one.cpp -lgmpxx -lgmp && ./a.out
+$ clang++ -std=c++20 -Wall -O3 -march=native -mtune=native -I include/ -I sha3/include/ examples/sign_one.cpp -lgmpxx -lgmp && ./a.out
 
 Falcon512 (Sign Single Message)
 

@@ -1,17 +1,13 @@
-#pragma once
 #include "ff.hpp"
-#include <cassert>
-
-// Test functional correctness of Falcon PQC suite implementation
-namespace test_falcon {
+#include <gtest/gtest.h>
 
 // Test functional correctness of Falcon prime field operations, by running
-// through multiple rounds ( see template parameter ) of execution of field
-// arithmetic, on randomly sampled field elements
-template<const size_t rounds = 1024ul>
-static void
-test_field_ops()
+// through multiple rounds of execution of field arithmetic, on randomly sampled
+// field elements.
+TEST(Falcon, ArithmeticOverZq)
 {
+  constexpr size_t rounds = 1024ul;
+
   std::random_device rd;
   std::mt19937_64 gen(rd());
   std::uniform_int_distribution<size_t> dis{ 0ul, 1ul << 20 };
@@ -25,25 +21,25 @@ test_field_ops()
     const auto d = -b;
     const auto e = a + d;
 
-    assert(c == e);
+    EXPECT_EQ(c, e);
 
     // multiplication, division, inversion
     const auto f = a * b;
     const auto g = f / b;
 
     if (b == ff::ff_t::zero()) {
-      assert(g == ff::ff_t::zero());
+      EXPECT_EQ(g, ff::ff_t::zero());
     } else {
-      assert(g == a);
+      EXPECT_EQ(g, a);
     }
 
     const auto h = a.inv();
     const auto k = h * a;
 
     if (a == ff::ff_t::zero()) {
-      assert(k == ff::ff_t::zero());
+      EXPECT_EQ(k, ff::ff_t::zero());
     } else {
-      assert(k == ff::ff_t::one());
+      EXPECT_EQ(k, ff::ff_t::one());
     }
 
     // exponentiation, multiplication
@@ -55,8 +51,6 @@ test_field_ops()
       res = res * a;
     }
 
-    assert(res == l);
+    EXPECT_EQ(res, l);
   }
-}
-
 }

@@ -1,9 +1,6 @@
 #pragma once
 #include "ntru_gen.hpp"
-#include "prng.hpp"
-#include <cassert>
 
-// Test functional correctness of Falcon PQC suite implementation
 namespace test_falcon {
 
 // Check whether computed f, g, F, G ∈ Z[x]/(x^N + 1) actually satisfy NTRU
@@ -14,7 +11,7 @@ namespace test_falcon {
 // though note that for polynomial mutliplication it doesn't use Karatsuba,
 // rather it performs polynomial arithmetic in frequency domain.
 template<const size_t N>
-bool
+static inline bool
 check_ntru_eq(const int32_t* const __restrict f,
               const int32_t* const __restrict g,
               const int32_t* const __restrict F,
@@ -69,33 +66,6 @@ check_ntru_eq(const int32_t* const __restrict f,
   std::free(res);
 
   return flg;
-}
-
-// Test functional correctness of NTRUGen routine, by first generating f, g, F,
-// G ∈ Z[x]/(x^N + 1) and then solving NTRU equation ( see eq 3.15 of Falcon
-// specification ).
-//
-// Collects some inspiration from
-// https://github.com/tprest/falcon.py/blob/88d01ed/test.py#L88-L94
-template<const size_t N>
-void
-test_ntru_gen()
-{
-  auto f = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
-  auto g = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
-  auto F = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
-  auto G = static_cast<int32_t*>(std::malloc(sizeof(int32_t) * N));
-
-  prng::prng_t rng;
-  ntru_gen::ntru_gen<N>(f, g, F, G, rng);
-  const bool flg = check_ntru_eq<N>(f, g, F, G);
-
-  std::free(f);
-  std::free(g);
-  std::free(F);
-  std::free(G);
-
-  assert(flg);
 }
 
 }
