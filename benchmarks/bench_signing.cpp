@@ -1,11 +1,8 @@
-#pragma once
+#include "bench_helper.hpp"
 #include "falcon.hpp"
 #include "prng.hpp"
 #include <benchmark/benchmark.h>
 #include <cassert>
-
-// Benchmark Falcon PQC suite implementation
-namespace bench_falcon {
 
 // Benchmark Falcon{512, 1024} message signing algorithm, emulating only single
 // message is signed with secret key.
@@ -14,7 +11,7 @@ namespace bench_falcon {
 // asked to sign a message, by decoding Falcon secret key.
 template<const size_t N>
 void
-sign_single(benchmark::State& state)
+falcon_sign_single(benchmark::State& state)
   requires((N == 512) || (N == 1024))
 {
   const size_t mlen = state.range();
@@ -32,15 +29,13 @@ sign_single(benchmark::State& state)
   falcon::keygen<N>(pkey, skey);
   rng.read(msg, mlen);
 
+  bool _signed = true;
   for (auto _ : state) {
-    const bool _signed = falcon::sign<N>(skey, msg, mlen, sig);
+    _signed &= falcon::sign<N>(skey, msg, mlen, sig);
 
     benchmark::DoNotOptimize(_signed);
-    assert(_signed);
-
     benchmark::DoNotOptimize(skey);
     benchmark::DoNotOptimize(msg);
-    benchmark::DoNotOptimize(mlen);
     benchmark::DoNotOptimize(sig);
     benchmark::ClobberMemory();
   }
@@ -54,6 +49,7 @@ sign_single(benchmark::State& state)
   std::free(sig);
   std::free(msg);
 
+  assert(_signed);
   assert(verified);
 }
 
@@ -66,7 +62,7 @@ sign_single(benchmark::State& state)
 // result.
 template<const size_t N>
 void
-sign_many(benchmark::State& state)
+falcon_sign_many(benchmark::State& state)
   requires((N == 512) || (N == 1024))
 {
   const size_t mlen = state.range();
@@ -99,7 +95,6 @@ sign_many(benchmark::State& state)
     benchmark::DoNotOptimize(B);
     benchmark::DoNotOptimize(T);
     benchmark::DoNotOptimize(msg);
-    benchmark::DoNotOptimize(mlen);
     benchmark::DoNotOptimize(sig);
     benchmark::DoNotOptimize(rng);
     benchmark::ClobberMemory();
@@ -118,4 +113,20 @@ sign_many(benchmark::State& state)
   assert(verified);
 }
 
-}
+BENCHMARK(falcon_sign_single<512>)
+  ->Arg(32)
+  ->ComputeStatistics("min", compute_min)
+  ->ComputeStatistics("max", compute_max);
+BENCHMARK(falcon_sign_many<512>)
+  ->Arg(32)
+  ->ComputeStatistics("min", compute_min)
+  ->ComputeStatistics("max", compute_max);
+
+BENCHMARK(falcon_sign_single<1024>)
+  ->Arg(32)
+  ->ComputeStatistics("min", compute_min)
+  ->ComputeStatistics("max", compute_max);
+BENCHMARK(falcon_sign_many<1024>)
+  ->Arg(32)
+  ->ComputeStatistics("min", compute_min)
+  ->ComputeStatistics("max", compute_max);

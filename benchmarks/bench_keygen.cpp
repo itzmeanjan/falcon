@@ -1,17 +1,14 @@
-#pragma once
+#include "bench_helper.hpp"
 #include "falcon.hpp"
 #include <benchmark/benchmark.h>
-
-// Benchmark Falcon PQC suite implementation
-namespace bench_falcon {
 
 // Benchmark Falcon{512, 1024} keypair generation algorithm.
 //
 // Note, this keygen API neither builds matrix B nor Falcon tree T, which are
 // required for Falcon message signing.
 template<const size_t N>
-void
-keygen(benchmark::State& state)
+static void
+falcon_keygen(benchmark::State& state)
   requires((N == 512) || (N == 1024))
 {
   constexpr size_t pklen = falcon_utils::compute_pkey_len<N>();
@@ -34,4 +31,10 @@ keygen(benchmark::State& state)
   std::free(skey);
 }
 
-}
+BENCHMARK(falcon_keygen<512>)
+  ->ComputeStatistics("min", compute_min)
+  ->ComputeStatistics("max", compute_max);
+
+BENCHMARK(falcon_keygen<1024>)
+  ->ComputeStatistics("min", compute_min)
+  ->ComputeStatistics("max", compute_max);

@@ -1,11 +1,8 @@
-#pragma once
+#include "bench_helper.hpp"
 #include "falcon.hpp"
 #include "prng.hpp"
 #include <benchmark/benchmark.h>
 #include <cassert>
-
-// Benchmark Falcon PQC suite implementation
-namespace bench_falcon {
 
 // Benchmark Falcon{512, 1024} signature verification algorithm.
 //
@@ -13,7 +10,7 @@ namespace bench_falcon {
 // verification is requested.
 template<const size_t N>
 void
-verify(benchmark::State& state)
+falcon_verify(benchmark::State& state)
   requires((N == 512) || (N == 1024))
 {
   const size_t mlen = state.range();
@@ -30,18 +27,17 @@ verify(benchmark::State& state)
 
   falcon::keygen<N>(pkey, skey);
   rng.read(msg, mlen);
+
   const bool _signed = falcon::sign<N>(skey, msg, mlen, sig);
   assert(_signed);
 
+  bool verified = true;
   for (auto _ : state) {
-    const bool verified = falcon::verify<N>(pkey, msg, mlen, sig);
+    verified &= falcon::verify<N>(pkey, msg, mlen, sig);
 
     benchmark::DoNotOptimize(verified);
-    assert(verified);
-
     benchmark::DoNotOptimize(pkey);
     benchmark::DoNotOptimize(msg);
-    benchmark::DoNotOptimize(mlen);
     benchmark::DoNotOptimize(sig);
     benchmark::ClobberMemory();
   }
@@ -52,6 +48,16 @@ verify(benchmark::State& state)
   std::free(skey);
   std::free(sig);
   std::free(msg);
+
+  assert(verified);
 }
 
-}
+BENCHMARK(falcon_verify<512>)
+  ->Arg(32)
+  ->ComputeStatistics("min", compute_min)
+  ->ComputeStatistics("max", compute_max);
+
+BENCHMARK(falcon_verify<1024>)
+  ->Arg(32)
+  ->ComputeStatistics("min", compute_min)
+  ->ComputeStatistics("max", compute_max);
