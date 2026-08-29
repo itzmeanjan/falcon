@@ -67,13 +67,29 @@ verify(const ff::ff_t* const __restrict h,
     normalized_s1[i] = t0 - t1;
   }
 
-  int32_t sqrd_norm = 0;
+  // Accumulated in 64 bits on purpose. β2 fits in 32 bits, but the norms this test must REJECT do
+  // not: for a signature that should fail, s1 = c - s2*h mod q is essentially uniform, so the sum
+  // over N=512 terms reaches ~1.9e10 — nine times INT32_MAX. In a 32-bit accumulator that
+  // overflows, and a wrapped negative value passes `<= β2`, so a signature over one message
+  // verifies against another. Genuine signatures have a small norm and never overflow, which is
+  // why round-trip tests and KATs do not see it.
+  //
+  // On the exact bound, since it looks off by one: the centring above uses `flg = (v >= qby2)`
+  // with qby2 = Q/2 = 6144 by integer division, so v=6144 maps to -6145 and the range is
+  // [-6145, 6143] — NOT the usual symmetric [-6144, 6144], which is what `if (v > q/2)` gives.
+  // Hence 512 * 6145^2 = 19,333,644,800 rather than 512 * 6144^2 = 19,327,352,832. The conclusion
+  // is the same either way; the asymmetry is noted only so the number is checkable. It cannot
+  // change an accept/reject decision, because one coefficient of that size already squares to more
+  // than β2 on its own.
+  int64_t sqrd_norm = 0;
 
   for (size_t i = 0; i < N; i++) {
-    sqrd_norm += s2[i] * s2[i];
+    const int64_t v = s2[i];
+    sqrd_norm += v * v;
   }
   for (size_t i = 0; i < N; i++) {
-    sqrd_norm += normalized_s1[i] * normalized_s1[i];
+    const int64_t v = normalized_s1[i];
+    sqrd_norm += v * v;
   }
 
   return sqrd_norm <= β2;

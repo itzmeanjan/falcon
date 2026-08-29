@@ -204,20 +204,38 @@ decode_skey(const uint8_t* const __restrict skey,
 //
 // Now notice, if we're working with a byte array of length 2 and we're asked to
 // extract 8 contiguous bits, starting from bit index 11, we will access memory
-// location which we're not supposed to be. So it's caller's responsibility to
-// ensure that atleast 2 consecutive memory locations ( i.e. bytes ) can be
-// accessed, starting from byte index (bitoff / 8).
+// location which we're not supposed to be. That is what `nbytes` is for: the caller passes the
+// length of the array and this routine reads no byte outside it.
+//
+// `nbytes` is the length of `bytes`, so neither byte is read unless it exists. Bits past the end of
+// the buffer read as zero — the same convention decompress_sig's own trailing-bits check relies on,
+// and a run of zeros there leads to rejection rather than to a decoded coefficient.
+//
+// Previously both bytes were read unconditionally. Two ways that goes out of bounds, and both are
+// reachable from verify(), which takes attacker-supplied bytes:
+//
+//   * bytes[byte_at + 1] whenever the read lands in the FINAL byte. Note this byte cannot affect
+//     the result when bit_at == 0, since `word >> 8` discards it entirely.
+//   * bytes[byte_at] itself. This one is easy to miss: the unary read below happens after
+//     `bit_idx += 8`, so bit_idx can sit up to 7 bits PAST slen even though the loop condition
+//     tested `bit_idx < slen` before the coefficient began. byte_at is then nbytes.
+//
+// ASan reports both on ordinary sign/verify round trips.
 static inline constexpr uint8_t
 extract_8_contiguous_bits(const uint8_t* const __restrict bytes,
-                          const size_t bitoff)
+                          const size_t bitoff,
+                          const size_t nbytes)
 {
   const size_t byte_at = bitoff >> 3;
   const size_t bit_at = bitoff & 7ul;
 
-  const uint16_t word = (static_cast<uint16_t>(bytes[byte_at]) << 8) |
-                        static_cast<uint16_t>(bytes[byte_at + 1]);
+  const uint16_t hi =
+    (byte_at < nbytes) ? (static_cast<uint16_t>(bytes[byte_at]) << 8) : 0;
+  const uint16_t lo = ((bit_at == 0) || ((byte_at + 1) >= nbytes))
+                        ? 0
+                        : static_cast<uint16_t>(bytes[byte_at + 1]);
 
-  return static_cast<uint8_t>(word >> (8 - bit_at));
+  return static_cast<uint8_t>((hi | lo) >> (8 - bit_at));
 }
 
 // Given a byte array and starting bit index, this routine extracts out next n
@@ -284,7 +302,7 @@ decompress_sig(const uint8_t* const __restrict sig,
 
     // extracts sign bit and low ( least significant ) 7 bits of coefficient
     {
-      const uint8_t res = extract_8_contiguous_bits(sig, bit_idx);
+      const uint8_t res = extract_8_contiguous_bits(sig, bit_idx, sbytelen);
 
       sign_bit = res >> 7; // sign bit
       coeff = res & 0x7f;  // low 7 bits of coefficient
@@ -293,7 +311,7 @@ decompress_sig(const uint8_t* const __restrict sig,
 
     // extract high bits of coefficient, which was encoded using unary code
     {
-      size_t k = std::countl_zero(extract_8_contiguous_bits(sig, bit_idx));
+      size_t k = std::countl_zero(extract_8_contiguous_bits(sig, bit_idx, sbytelen));
       if (k < 8) [[likely]] {
         coeff += (1 << 7) * k;
         bit_idx += k;
@@ -307,7 +325,7 @@ decompress_sig(const uint8_t* const __restrict sig,
             const auto t = extract_rem_contiguous_bits_in_byte(sig, bit_idx);
             v = std::countl_zero(t);
           } else {
-            const auto t = extract_8_contiguous_bits(sig, bit_idx);
+            const auto t = extract_8_contiguous_bits(sig, bit_idx, sbytelen);
             v = std::countl_zero(t);
           }
           k += v;
@@ -344,7 +362,7 @@ decompress_sig(const uint8_t* const __restrict sig,
 
       size_t v = 0;
       if (ebits == 8) [[likely]] {
-        const auto t = extract_8_contiguous_bits(sig, bit_idx);
+        const auto t = extract_8_contiguous_bits(sig, bit_idx, sbytelen);
         v = std::countl_zero(t);
       } else {
         const auto t = extract_rem_contiguous_bits_in_byte(sig, bit_idx);
